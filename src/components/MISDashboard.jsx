@@ -1,84 +1,331 @@
-import React, { useState } from 'react';
-import { CalendarCheck, TrendingUp, Users, DollarSign, Activity, Package, ChevronDown, Search, Bell, Filter, Download, RefreshCw, BarChart, LineChart, PieChart } from 'lucide-react';
-import { LineChart as RechartsLineChart, Line, BarChart as RechartsBarChart, Bar, PieChart as RechartsPieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
-
-// Demo Data for Charts
-const revenueData = [
-  { name: 'Jan 1', revenue: 4000, profit: 2400 },
-  { name: 'Jan 8', revenue: 3000, profit: 1398 },
-  { name: 'Jan 15', revenue: 9800, profit: 3908 },
-  { name: 'Jan 22', revenue: 3780, profit: 2000 },
-  { name: 'Jan 29', revenue: 5890, profit: 3800 },
-  { name: 'Feb 5', revenue: 4390, profit: 2500 },
-  { name: 'Feb 12', revenue: 8490, profit: 5300 },
-  { name: 'Feb 19', revenue: 6490, profit: 4300 },
-  { name: 'Feb 26', revenue: 9290, profit: 6100 },
-  { name: 'Mar 5', revenue: 11490, profit: 7300 },
-];
-
-const salesDistributionData = [
-  { name: 'Electronics', value: 35, color: '#4F46E5' },
-  { name: 'Apparel', value: 25, color: '#0EA5E9' },
-  { name: 'Home Goods', value: 18, color: '#10B981' },
-  { name: 'Beauty', value: 12, color: '#F59E0B' },
-  { name: 'Other', value: 10, color: '#EF4444' },
-];
-
-const customerAcquisitionData = [
-  { name: 'Jan', organic: 40, paid: 24, referral: 18 },
-  { name: 'Feb', organic: 30, paid: 38, referral: 20 },
-  { name: 'Mar', organic: 42, paid: 36, referral: 25 },
-  { name: 'Apr', organic: 35, paid: 40, referral: 22 },
-  { name: 'May', organic: 50, paid: 45, referral: 30 },
-];
-
-const productsData = [
-  { id: 1, name: 'Ultra HD Smart TV', sales: 235, revenue: '$16,240', trend: 8.5 },
-  { id: 2, name: 'Wireless Headphones', sales: 189, revenue: '$12,380', trend: 3.2 },
-  { id: 3, name: 'Smartphone Pro Max', sales: 156, revenue: '$9,450', trend: -2.1 },
-  { id: 4, name: 'Fitness Tracker', sales: 124, revenue: '$7,820', trend: 6.7 },
-  { id: 5, name: 'Smart Home Hub', sales: 98, revenue: '$5,120', trend: -1.4 },
-];
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  CalendarCheck,
+  TrendingUp,
+  Users,
+  DollarSign,
+  Activity,
+  Package,
+  ChevronDown,
+  Search,
+  Bell,
+  Filter,
+  Download,
+  RefreshCw,
+  BarChart,
+  LineChart,
+  PieChart,
+  AlertTriangle,
+  Briefcase,
+  CreditCard,
+} from "lucide-react";
+import {
+  LineChart as RechartsLineChart,
+  Line,
+  BarChart as RechartsBarChart,
+  Bar,
+  PieChart as RechartsPieChart,
+  Pie,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  Cell,
+} from "recharts";
+import useMarketData from "../components/marketData";
+import axiosInstance from "../api/axios";
 
 // Dashboard component
-const MISDashboard = () => {
-  const [activeTab, setActiveTab] = useState('dashboard');
-  
+const EnhancedMISDashboard = () => {
+  const [activeTab, setActiveTab] = useState("risk");
+  const [accountType, setAccountType] = useState("all");
+  const [accountData, setAccountData] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [liveRate, setLiveRate] = useState(0);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [selectedBank, setSelectedBank] = useState("");
+
+  const { marketData } = useMarketData(["GOLD"]);
+
+  // Calculate risk level based on account type
+  const calculateRiskLevel = useCallback((item, accountType) => {
+    const marginRatio = item.marginRatio || 0;
+
+    // Only apply margin to LP and Debtor accounts
+    if (accountType.toLowerCase() === "bank") {
+      return "safe"; // Bank accounts are always considered safe
+    } else if (accountType.toLowerCase() === "lp") {
+      // LP accounts use reversed logic
+      if (marginRatio <= 0.33) {
+        return "safe"; // Low margin ratio (0%-33%) - Now considered safe for LP
+      } else if (marginRatio <= 0.66) {
+        return "moderate"; // Medium margin ratio (34%-66%) - Moderate risk
+      } else {
+        return "high"; // High margin ratio (67%-100%+) - Now considered high risk
+      }
+    } else {
+      // Debtor accounts use standard logic
+      if (marginRatio >= 0.67) {
+        return "safe"; // High margin (67%-100%+) - Safe
+      } else if (marginRatio >= 0.34) {
+        return "moderate"; // Medium margin (34%-66%) - Moderate risk
+      } else {
+        return "high"; // Low margin (0%-33%) - High risk
+      }
+    }
+  }, []);
+
+  // Calculate user data with risk assessment
+  const calculateUserData = useCallback(
+    (item, goldRate) => {
+      const accBalance = parseFloat(item.AMOUNTFC) || 0;
+      const metalWeight = parseFloat(item.METAL_WT) || 0;
+      const margin = parseFloat(item.margin) || 0;
+      const goldRateValue = goldRate || 0;
+      const accountType = item.Account_Type?.toLowerCase() || "n/a";
+
+      // Calculate values
+      const valueInAED = parseFloat((goldRateValue * metalWeight).toFixed(2));
+      const netEquity = parseFloat((valueInAED + accBalance).toFixed(2));
+
+      // Only apply margin to LP and Debtor accounts
+      const marginAmount =
+        accountType === "bank"
+          ? 0
+          : parseFloat(((netEquity * margin) / 100).toFixed(2));
+      const totalNeeded = parseFloat((marginAmount + netEquity).toFixed(2));
+
+      // Calculate margin ratio
+      const marginRatio =
+        marginAmount > 0 && netEquity > 0 ? netEquity / marginAmount : 0;
+
+      // Additional field for bank identification
+      const bank = item.bank || "Unknown Bank";
+
+      return {
+        id: item.ACCODE,
+        name: item.ACCOUNT_HEAD,
+        accBalance,
+        metalWeight,
+        goldratevalueInAED: goldRateValue,
+        margin: margin || 0,
+        valueInAED,
+        netEquity,
+        marginAmount,
+        totalNeeded,
+        marginRatio,
+        riskLevel: calculateRiskLevel({ marginRatio }, accountType),
+        accountType,
+        bank,
+        favorite: item.is_favorite || false,
+        email: item.email || "customer@example.com",
+        phone: item.phone || "N/A",
+      };
+    },
+    [calculateRiskLevel]
+  );
+
+  // Update live rate when market data changes
+  useEffect(() => {
+    if (marketData?.bid) {
+      const calculatedRate = parseFloat(
+        ((marketData.bid / 31.103) * 3.674).toFixed(2)
+      );
+      setLiveRate(calculatedRate);
+    }
+  }, [marketData]);
+
+  // Fetch data from backend
+  const fetchAccountData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await axiosInstance.get("/fetch-data");
+      if (response.data.status === 201) {
+        // Process and transform all data
+        const transformedData = response.data.data.map((item) =>
+          calculateUserData(item, liveRate)
+        );
+        setAccountData(transformedData);
+      } else {
+        setError("Failed to fetch data");
+      }
+    } catch (err) {
+      console.error("Error fetching data:", err);
+      setError("Error connecting to server");
+    } finally {
+      setLoading(false);
+    }
+  }, [liveRate, calculateUserData]);
+
+  // Force refresh data
+  const handleRefresh = () => {
+    setRefreshTrigger((prev) => prev + 1);
+  };
+
+  // Effect for initial data load and refresh
+  useEffect(() => {
+    fetchAccountData();
+  }, [fetchAccountData, refreshTrigger]);
+
+  // Effect for auto-refresh interval
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      fetchAccountData();
+    }, 300000); // Every 5 minutes
+
+    return () => clearInterval(intervalId);
+  }, [fetchAccountData]);
+
+  // Get available banks for dropdown
+  const availableBanks = React.useMemo(() => {
+    const banks = [
+      ...new Set(
+        accountData
+          .filter((item) => item.accountType === "bank")
+          .map((item) => item.bank)
+      ),
+    ];
+    return banks;
+  }, [accountData]);
+
+  // Filter data based on selected account type and bank
+  const filteredData = React.useMemo(() => {
+    let filtered =
+      accountType === "all"
+        ? accountData
+        : accountData.filter(
+            (item) => item.accountType === accountType.toLowerCase()
+          );
+
+    // Additional bank filter for bank accounts
+    if (accountType === "bank" && selectedBank) {
+      filtered = filtered.filter((item) => item.bank === selectedBank);
+    }
+
+    return filtered;
+  }, [accountData, accountType, selectedBank]);
+
+  // Calculate risk distribution for visualization
+  const riskDistribution = React.useMemo(
+    () => [
+      {
+        name: "High Risk",
+        value: filteredData.filter((item) => item.riskLevel === "high").length,
+        color: "#EF4444",
+      },
+      {
+        name: "Moderate Risk",
+        value: filteredData.filter((item) => item.riskLevel === "moderate")
+          .length,
+        color: "#F59E0B",
+      },
+      {
+        name: "Safe",
+        value: filteredData.filter((item) => item.riskLevel === "safe").length,
+        color: "#10B981",
+      },
+    ],
+    [filteredData]
+  );
+
+  // Calculate account type distribution
+  const accountTypeDistribution = React.useMemo(
+    () => [
+      {
+        name: "LP",
+        value: accountData.filter((item) => item.accountType === "lp").length,
+        color: "#4F46E5",
+      },
+      {
+        name: "Debtor",
+        value: accountData.filter((item) => item.accountType === "debtor")
+          .length,
+        color: "#0EA5E9",
+      },
+      {
+        name: "Bank",
+        value: accountData.filter((item) => item.accountType === "bank").length,
+        color: "#10B981",
+      },
+    ],
+    [accountData]
+  );
+
+  // Calculate accounts needing attention (high risk)
+  const highRiskAccounts = React.useMemo(
+    () =>
+      filteredData
+        .filter((item) => item.riskLevel === "high")
+        .sort((a, b) => a.marginRatio - b.marginRatio)
+        .slice(0, 5),
+    [filteredData]
+  );
+
+  // Calculate totals for the selected account type
+  const accountTypeTotals = React.useMemo(
+    () => ({
+      totalAccounts: filteredData.length,
+      totalMetalWeight: filteredData
+        .reduce((sum, item) => sum + item.metalWeight, 0)
+        .toFixed(2),
+      totalNetEquity: filteredData.reduce(
+        (sum, item) => sum + item.netEquity,
+        0
+      ),
+      totalMarginAmount: filteredData.reduce(
+        (sum, item) => sum + item.marginAmount,
+        0
+      ),
+      highRiskCount: filteredData.filter((item) => item.riskLevel === "high")
+        .length,
+      safeCount: filteredData.filter((item) => item.riskLevel === "safe")
+        .length,
+      moderateCount: filteredData.filter(
+        (item) => item.riskLevel === "moderate"
+      ).length,
+      totalBalance: filteredData.reduce(
+        (sum, item) => sum + item.accBalance,
+        0
+      ),
+    }),
+    [filteredData]
+  );
+
   return (
     <div className="flex flex-col h-screen w-full bg-gray-50">
       {/* Header */}
-      <header className="bg-white px-6 py-4">
+      <header className="bg-white px-6 py-4 shadow-sm">
         <div className="flex justify-between items-center">
           <div>
-            {/* <h1 className="text-2xl font-bold text-gray-800">MIS Suite</h1> */}
-            {/* <div className="flex mt-1 space-x-4">
-              <TabButton 
-                active={activeTab === 'reporting'} 
-                onClick={() => setActiveTab('reporting')}
+            <h1 className="text-2xl font-bold text-gray-800">MIS Suite</h1>
+            <div className="flex mt-1 space-x-4">
+              <TabButton
+                active={activeTab === "risk"}
+                onClick={() => setActiveTab("risk")}
+                icon={<AlertTriangle size={16} />}
+                label="Risk Management"
+              />
+              {/* <TabButton
+                active={activeTab === "reporting"}
+                onClick={() => setActiveTab("reporting")}
                 icon={<BarChart size={16} />}
                 label="Reporting"
-              />
-              <TabButton 
-                active={activeTab === 'dashboard'} 
-                onClick={() => setActiveTab('dashboard')}
-                icon={<Activity size={16} />}
-                label="Dashboard"
-              />
-              <TabButton 
-                active={activeTab === 'analytics'} 
-                onClick={() => setActiveTab('analytics')}
-                icon={<TrendingUp size={16} />}
-                label="Analytics"
-              />
-            </div> */}
+              /> */}
+            </div>
           </div>
-          
+
           <div className="flex items-center space-x-4">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-              <input 
-                type="text" 
-                placeholder="Search..." 
+              <Search
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                size={16}
+              />
+              <input
+                type="text"
+                placeholder="Search..."
                 className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
@@ -87,179 +334,328 @@ const MISDashboard = () => {
               <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
             </button>
             <div className="flex items-center">
-              <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-medium">JD</div>
+              <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-medium">
+                JD
+              </div>
               <ChevronDown size={16} className="ml-2 text-gray-500" />
             </div>
           </div>
         </div>
       </header>
-      
+
       {/* Main Content */}
       <main className="flex-1 p-6 overflow-auto">
-        {/* Dashboard Controls */}
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center space-x-4">
-            <h2 className="text-xl font-semibold text-gray-800">Business Performance Overview</h2>
-            <div className="flex items-center bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm font-medium">
-              <CalendarCheck size={14} className="mr-1" />
-              Last 30 Days
-              <ChevronDown size={14} className="ml-1" />
+        {activeTab === "risk" && (
+          <RiskManagementContent
+            loading={loading}
+            error={error}
+            liveRate={liveRate}
+            accountType={accountType}
+            setAccountType={setAccountType}
+            filteredData={filteredData}
+            riskDistribution={riskDistribution}
+            accountTypeDistribution={accountTypeDistribution}
+            highRiskAccounts={highRiskAccounts}
+            accountTypeTotals={accountTypeTotals}
+            onRefresh={handleRefresh}
+            selectedBank={selectedBank}
+            setSelectedBank={setSelectedBank}
+            availableBanks={availableBanks}
+          />
+        )}
+
+        {activeTab === "reporting" && (
+          <ReportingContent
+            accountData={accountData}
+            accountType={accountType}
+            setAccountType={setAccountType}
+            accountTypeTotals={accountTypeTotals}
+            selectedBank={selectedBank}
+            setSelectedBank={setSelectedBank}
+            availableBanks={availableBanks}
+            liveRate={liveRate}
+          />
+        )}
+      </main>
+    </div>
+  );
+};
+
+// Risk Management Content Component
+const RiskManagementContent = ({
+  loading,
+  error,
+  liveRate,
+  accountType,
+  setAccountType,
+  filteredData,
+  riskDistribution,
+  accountTypeDistribution,
+  highRiskAccounts,
+  accountTypeTotals,
+  onRefresh,
+  selectedBank,
+  setSelectedBank,
+  availableBanks,
+}) => {
+  // Generate time series data for risk trend
+  const getRiskTrendData = () => {
+    // This would ideally come from real historical data
+    // For now using a simple generator based on the current data
+    const months = ["Jan", "Feb", "Mar", "Apr", "May"];
+    return months.map((month, i) => {
+      const baseHigh =
+        (accountTypeTotals.highRiskCount / accountTypeTotals.totalAccounts) *
+        100;
+      const baseMod =
+        (accountTypeTotals.moderateCount / accountTypeTotals.totalAccounts) *
+        100;
+      const baseSafe =
+        (accountTypeTotals.safeCount / accountTypeTotals.totalAccounts) * 100;
+
+      // Add some variance to make it look realistic
+      const variance = (i - 2) * 5;
+
+      return {
+        date: month,
+        high: Math.max(0, Math.min(100, baseHigh + variance / 2)),
+        moderate: Math.max(0, Math.min(100, baseMod - variance / 4)),
+        safe: Math.max(0, Math.min(100, baseSafe - variance / 4)),
+      };
+    });
+  };
+
+  return (
+    <>
+      {/* Risk Management Controls */}
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center space-x-4">
+          <h2 className="text-xl font-semibold text-gray-800">
+            Risk Management Dashboard
+          </h2>
+          <div className="flex items-center bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm font-medium">
+            <CalendarCheck size={14} className="mr-1" />
+            Live Data
+          </div>
+          {loading && (
+            <div className="flex items-center text-amber-600 text-sm">
+              <RefreshCw size={14} className="mr-1 animate-spin" />
+              Updating...
             </div>
-          </div>
-          
-          <div className="flex items-center space-x-3">
-            {/* <button className="flex items-center px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
-              <Filter size={16} className="mr-2 text-gray-500" />
-              <span>Filters</span>
-            </button>
-            <button className="flex items-center px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
-              <Download size={16} className="mr-2 text-gray-500" />
-              <span>Export</span>
-            </button> */}
-            <button className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50">
-              <RefreshCw size={16} className="text-gray-500" />
-            </button>
-          </div>
+          )}
+          {error && (
+            <div className="flex items-center bg-red-50 text-red-700 px-3 py-1 rounded-full text-sm font-medium">
+              <AlertTriangle size={14} className="mr-1" />
+              {error}
+            </div>
+          )}
         </div>
-        
-        {/* Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-          <MetricCard 
-            title="Total Revenue" 
-            value="$128,540" 
-            change="+12.5%" 
-            positive={true}
-            icon={<DollarSign size={22} className="text-blue-600" />} 
-          />
-          <MetricCard 
-            title="Active Customers" 
-            value="3,842" 
-            change="+7.2%" 
-            positive={true}
-            icon={<Users size={22} className="text-green-600" />} 
-          />
-          <MetricCard 
-            title="Conversion Rate" 
-            value="24.3%" 
-            change="-2.1%" 
+
+        <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2">
+            <span className="text-sm text-gray-500">Gold Rate:</span>
+            <span className="font-medium text-gray-800">{liveRate} AED/g</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <span className="text-sm text-gray-500">Account Type:</span>
+            <select
+              value={accountType}
+              onChange={(e) => {
+                setAccountType(e.target.value);
+                // Reset bank selection if not viewing bank accounts
+                if (e.target.value !== "bank") {
+                  setSelectedBank("");
+                }
+              }}
+              className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">All Accounts</option>
+              <option value="lp">LP</option>
+              <option value="debtor">Debtor</option>
+              <option value="bank">Bank</option>
+            </select>
+          </div>
+
+          {/* Show bank selector only when bank account type is selected */}
+          {accountType === "bank" && (
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-500">Bank:</span>
+              <select
+                value={selectedBank}
+                onChange={(e) => setSelectedBank(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Banks</option>
+                {availableBanks.map((bank) => (
+                  <option key={bank} value={bank}>
+                    {bank}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <button
+            className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            onClick={onRefresh}
+            disabled={loading}
+          >
+            <RefreshCw
+              size={16}
+              className={`text-gray-500 ${loading ? "animate-spin" : ""}`}
+            />
+          </button>
+        </div>
+      </div>
+
+      {/* Risk Key Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+        <MetricCard
+          title="Total Accounts"
+          value={accountTypeTotals.totalAccounts.toString()}
+          change={`${(
+            (accountTypeTotals.totalAccounts /
+              accountTypeDistribution.reduce(
+                (sum, item) => sum + item.value,
+                0
+              )) *
+            100
+          ).toFixed(1)}%`}
+          positive={true}
+          icon={<Users size={22} className="text-blue-600" />}
+        />
+        {/* Show High Risk Accounts except for bank accounts */}
+        {accountType !== "bank" && (
+          <MetricCard
+            title="High Risk Accounts"
+            value={accountTypeTotals.highRiskCount.toString()}
+            change={`${(
+              (accountTypeTotals.highRiskCount /
+                accountTypeTotals.totalAccounts) *
+              100
+            ).toFixed(1)}%`}
             positive={false}
-            icon={<TrendingUp size={22} className="text-purple-600" />} 
+            icon={<AlertTriangle size={22} className="text-red-600" />}
           />
-          <MetricCard 
-            title="Total Orders" 
-            value="1,294" 
-            change="+18.3%" 
-            positive={true}
-            icon={<Package size={22} className="text-orange-600" />} 
-          />
-        </div>
-        
-        {/* Charts Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Revenue Trend Chart */}
-          <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-semibold text-gray-800">Revenue Trend</h3>
-              <div className="flex space-x-2">
-                <button className="px-3 py-1 text-sm bg-blue-50 text-blue-600 rounded-lg">Daily</button>
-                <button className="px-3 py-1 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Weekly</button>
-                <button className="px-3 py-1 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Monthly</button>
-              </div>
-            </div>
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <RechartsLineChart
-                  data={revenueData}
-                  margin={{
-                    top: 5,
-                    right: 30,
-                    left: 20,
-                    bottom: 5,
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="name" stroke="#9ca3af" fontSize={12} />
-                  <YAxis stroke="#9ca3af" fontSize={12} />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 6 }} />
-                  <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 6 }} />
-                </RechartsLineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-          
-          {/* Sales Distribution Pie Chart */}
+        )}
+        <MetricCard
+          title="Total Metal Weight"
+          value={`${accountTypeTotals.totalMetalWeight}g`}
+          change="+5.2%"
+          positive={true}
+          icon={<Package size={22} className="text-amber-600" />}
+        />
+        {/* Highlight Total Balance more prominently as requested */}
+        <MetricCard
+          title="Total Balance"
+          value={`${accountTypeTotals.totalBalance.toLocaleString()} AED`}
+          change="+3.8%"
+          positive={true}
+          icon={<DollarSign size={22} className="text-green-600" />}
+          highlight={true}
+        />
+      </div>
+
+      {/* Charts Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Risk Distribution Chart - Hide for bank accounts */}
+        {accountType !== "bank" && (
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="font-semibold text-gray-800">Sales Distribution</h3>
-              <ChevronDown size={16} className="text-gray-500" />
+              <h3 className="font-semibold text-gray-800">Risk Distribution</h3>
+              <div className="text-sm text-gray-500">
+                {accountType === "all"
+                  ? "All Accounts"
+                  : `${accountType.toUpperCase()} Accounts`}
+              </div>
             </div>
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <RechartsPieChart>
                   <Pie
-                    data={salesDistributionData}
+                    data={riskDistribution}
                     cx="50%"
                     cy="50%"
                     labelLine={false}
                     outerRadius={80}
                     fill="#8884d8"
                     dataKey="value"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    label={({ name, percent }) =>
+                      `${name} ${(percent * 100).toFixed(0)}%`
+                    }
                   >
-                    {salesDistributionData.map((entry, index) => (
+                    {riskDistribution.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip
+                    formatter={(value) => [`${value} accounts`, "Count"]}
+                  />
                   <Legend />
                 </RechartsPieChart>
               </ResponsiveContainer>
             </div>
           </div>
-          
-          {/* Top Products Table */}
-          <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-semibold text-gray-800">Top Performing Products</h3>
-              <button className="text-blue-600 text-sm font-medium">View All</button>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-2 text-gray-600 font-medium">Product</th>
-                    <th className="text-left py-3 px-2 text-gray-600 font-medium">Sales</th>
-                    <th className="text-left py-3 px-2 text-gray-600 font-medium">Revenue</th>
-                    <th className="text-left py-3 px-2 text-gray-600 font-medium">Trend</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {productsData.map(product => (
-                    <TableRow 
-                      key={product.id}
-                      name={product.name} 
-                      sales={product.sales} 
-                      revenue={product.revenue} 
-                      trend={product.trend} 
-                    />
-                  ))}
-                </tbody>
-              </table>
+        )}
+
+        {/* Account Type Distribution */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-semibold text-gray-800">
+              Account Type Distribution
+            </h3>
+            <div className="text-sm text-gray-500">
+              Total:{" "}
+              {accountTypeDistribution.reduce(
+                (sum, item) => sum + item.value,
+                0
+              )}{" "}
+              accounts
             </div>
           </div>
-          
-          {/* Customers Acquisition Chart */}
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <RechartsPieChart>
+                <Pie
+                  data={accountTypeDistribution}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                  label={({ name, percent }) =>
+                    `${name} ${(percent * 100).toFixed(0)}%`
+                  }
+                >
+                  {accountTypeDistribution.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(value) => [`${value} accounts`, "Count"]}
+                />
+                <Legend />
+              </RechartsPieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Risk Trend Over Time - Hide for bank accounts */}
+        {accountType !== "bank" ? (
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="font-semibold text-gray-800">Customer Acquisition</h3>
-              <ChevronDown size={16} className="text-gray-500" />
+              <h3 className="font-semibold text-gray-800">Risk Trend</h3>
+              <div className="text-sm text-gray-500">
+                {accountType === "all"
+                  ? "All Accounts"
+                  : `${accountType.toUpperCase()} Accounts`}
+              </div>
             </div>
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <RechartsBarChart
-                  data={customerAcquisitionData}
+                <RechartsLineChart
+                  data={getRiskTrendData()}
                   margin={{
                     top: 5,
                     right: 30,
@@ -268,31 +664,372 @@ const MISDashboard = () => {
                   }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="name" stroke="#9ca3af" fontSize={12} />
+                  <XAxis dataKey="date" stroke="#9ca3af" fontSize={12} />
                   <YAxis stroke="#9ca3af" fontSize={12} />
-                  <Tooltip />
+                  <Tooltip
+                    formatter={(value) => [
+                      `${value.toFixed(1)}%`,
+                      "Percentage",
+                    ]}
+                  />
                   <Legend />
-                  <Bar dataKey="organic" fill="#4f46e5" />
-                  <Bar dataKey="paid" fill="#10b981" />
-                  <Bar dataKey="referral" fill="#f59e0b" />
-                </RechartsBarChart>
+                  <Line
+                    type="monotone"
+                    dataKey="high"
+                    stroke="#EF4444"
+                    strokeWidth={2}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="moderate"
+                    stroke="#F59E0B"
+                    strokeWidth={2}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="safe"
+                    stroke="#10B981"
+                    strokeWidth={2}
+                  />
+                </RechartsLineChart>
               </ResponsiveContainer>
             </div>
           </div>
+        ) : (
+          // For bank accounts, show a balance trend chart instead
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold text-gray-800">Balance Trend</h3>
+              <div className="text-sm text-gray-500">
+                {selectedBank ? selectedBank : "All Banks"}
+              </div>
+            </div>
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <RechartsLineChart
+                  data={[
+                    { month: "Jan", balance: 2400000 },
+                    { month: "Feb", balance: 2600000 },
+                    { month: "Mar", balance: 2900000 },
+                    { month: "Apr", balance: 3100000 },
+                    { month: "May", balance: 3400000 },
+                  ]}
+                  margin={{
+                    top: 5,
+                    right: 30,
+                    left: 20,
+                    bottom: 5,
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="month" stroke="#9ca3af" fontSize={12} />
+                  <YAxis stroke="#9ca3af" fontSize={12} />
+                  <Tooltip
+                    formatter={(value) => [
+                      `${value.toLocaleString()} AED`,
+                      "Balance",
+                    ]}
+                  />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="balance"
+                    stroke="#10B981"
+                    strokeWidth={2}
+                  />
+                </RechartsLineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+
+        {/* High Risk Accounts Table */}
+        <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-semibold text-gray-800">High Risk Accounts</h3>
+            <button className="text-blue-600 text-sm font-medium">
+              View All
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-2 text-gray-600 font-medium">
+                    Account
+                  </th>
+                  <th className="text-left py-3 px-2 text-gray-600 font-medium">
+                    Type
+                  </th>
+                  <th className="text-left py-3 px-2 text-gray-600 font-medium">
+                    Net Equity
+                  </th>
+                  <th className="text-left py-3 px-2 text-gray-600 font-medium">
+                    Balance
+                  </th>
+                  <th className="text-left py-3 px-2 text-gray-600 font-medium">
+                    Margin Ratio
+                  </th>
+                  <th className="text-left py-3 px-2 text-gray-600 font-medium">
+                    Status
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {highRiskAccounts.length > 0 ? (
+                  highRiskAccounts.map((account) => (
+                    <tr
+                      key={account.id}
+                      className="border-b border-gray-100 hover:bg-gray-50"
+                    >
+                      <td className="py-3 px-2">
+                        <span className="font-medium text-gray-800">
+                          {account.name}
+                        </span>
+                      </td>
+                      <td className="py-3 px-2">
+                        <span className="capitalize text-gray-600">
+                          {account.accountType}
+                        </span>
+                      </td>
+                      <td className="py-3 px-2 text-gray-600">
+                        {account.netEquity.toLocaleString()} AED
+                      </td>
+                      <td className="py-3 px-2 text-gray-600">
+                        {account.accBalance.toLocaleString()} AED
+                      </td>
+                      <td className="py-3 px-2 text-gray-600">
+                        {(account.marginRatio * 100).toFixed(1)}%
+                      </td>
+                      <td className="py-3 px-2">
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-50 text-red-600">
+                          High Risk
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td
+                      colSpan="6"
+                      className="py-4 px-2 text-center text-gray-500"
+                    >
+                      No high risk accounts found
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </main>
-    </div>
+
+        {/* Margin Requirements Summary */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-semibold text-gray-800">Margin Requirements</h3>
+            <div className="text-sm text-gray-500">
+              {accountType === "all"
+                ? "All Accounts"
+                : `${accountType.toUpperCase()} Accounts`}
+            </div>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-sm text-gray-600">Total Net Equity</span>
+                <span className="font-medium text-gray-800">
+                  {accountTypeTotals.totalNetEquity.toLocaleString()} AED
+                </span>
+              </div>
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-sm text-gray-600">
+                  Total Margin Required
+                </span>
+                <span className="font-medium text-gray-800">
+                  {accountTypeTotals.totalMarginAmount.toLocaleString()} AED
+                </span>
+              </div>
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-sm text-gray-600">
+                  Total Metal Weight
+                </span>
+                <span className="font-medium text-gray-800">
+                  {accountTypeTotals.totalMetalWeight} g
+                </span>
+              </div>
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-sm text-gray-600">Total Balance</span>
+                <span className="font-medium text-gray-800">
+                  {accountTypeTotals.totalBalance.toLocaleString()} AED
+                </span>
+              </div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm text-gray-600">
+                  Gold Value (at current rate)
+                </span>
+                <span className="font-medium text-gray-800">
+                  {filteredData
+                    .reduce((sum, item) => sum + item.valueInAED, 0)
+                    .toLocaleString()}{" "}
+                  AED
+                </span>
+              </div>
+              <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-blue-600"
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      (accountTypeTotals.totalNetEquity /
+                        filteredData.reduce(
+                          (sum, item) => sum + item.totalNeeded,
+                          0
+                        )) *
+                        100
+                    )}%`,
+                  }}
+                ></div>
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                Equity Coverage:{" "}
+                {(
+                  (accountTypeTotals.totalNetEquity /
+                    filteredData.reduce(
+                      (sum, item) => sum + item.totalNeeded,
+                      0
+                    )) *
+                  100
+                ).toFixed(1)}
+                %
+              </div>
+            </div>
+            {accountType === "all" && (
+              <div className="border-t border-gray-100 pt-4">
+                <h4 className="text-sm font-medium text-gray-700 mb-2">
+                  Margin Requirements by Account Type
+                </h4>
+                <div className="space-y-2">
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-xs text-gray-600">LP Accounts</span>
+                      <span className="text-xs font-medium text-gray-800">
+                        {filteredData
+                          .filter((item) => item.accountType === "lp")
+                          .reduce((sum, item) => sum + item.marginAmount, 0)
+                          .toLocaleString()}{" "}
+                        AED
+                      </span>
+                    </div>
+                    <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-indigo-600"
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            (filteredData
+                              .filter((item) => item.accountType === "lp")
+                              .reduce((sum, item) => sum + item.netEquity, 0) /
+                              filteredData
+                                .filter((item) => item.accountType === "lp")
+                                .reduce(
+                                  (sum, item) =>
+                                    sum + item.marginAmount + 0.0001,
+                                  0
+                                )) *
+                              100
+                          )}%`,
+                        }}
+                      ></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-xs text-gray-600">
+                        Debtor Accounts
+                      </span>
+                      <span className="text-xs font-medium text-gray-800">
+                        {filteredData
+                          .filter((item) => item.accountType === "debtor")
+                          .reduce((sum, item) => sum + item.marginAmount, 0)
+                          .toLocaleString()}{" "}
+                        AED
+                      </span>
+                    </div>
+                    <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-blue-500"
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            (filteredData
+                              .filter((item) => item.accountType === "debtor")
+                              .reduce((sum, item) => sum + item.netEquity, 0) /
+                              filteredData
+                                .filter((item) => item.accountType === "debtor")
+                                .reduce(
+                                  (sum, item) =>
+                                    sum + item.marginAmount + 0.0001,
+                                  0
+                                )) *
+                              100
+                          )}%`,
+                        }}
+                      ></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-xs text-gray-600">
+                        Bank Accounts
+                      </span>
+                      <span className="text-xs font-medium text-gray-800">
+                        {filteredData
+                          .filter((item) => item.accountType === "bank")
+                          .reduce((sum, item) => sum + item.marginAmount, 0)
+                          .toLocaleString()}{" "}
+                        AED
+                      </span>
+                    </div>
+                    <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-green-500"
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            (filteredData
+                              .filter((item) => item.accountType === "bank")
+                              .reduce((sum, item) => sum + item.netEquity, 0) /
+                              filteredData
+                                .filter((item) => item.accountType === "bank")
+                                .reduce(
+                                  (sum, item) =>
+                                    sum + item.marginAmount + 0.0001,
+                                  0
+                                )) *
+                              100
+                          )}%`,
+                        }}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
   );
 };
 
 // Tab button component
 const TabButton = ({ active, onClick, icon, label }) => (
-  <button 
+  <button
     onClick={onClick}
     className={`flex items-center px-1 py-1 border-b-2 text-sm font-medium ${
-      active 
-        ? 'border-blue-600 text-blue-600' 
-        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+      active
+        ? "border-blue-600 text-blue-600"
+        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
     }`}
   >
     {icon}
@@ -310,28 +1047,16 @@ const MetricCard = ({ title, value, change, positive, icon }) => (
       </div>
       <div className="p-2 rounded-lg bg-blue-50">{icon}</div>
     </div>
-    <div className={`mt-2 text-sm ${positive ? 'text-green-600' : 'text-red-600'} font-medium`}>
-      {change} {positive ? '↑' : '↓'}
+    <div
+      className={`mt-2 text-sm ${
+        positive ? "text-green-600" : "text-red-600"
+      } font-medium`}
+    >
+      {change} {positive ? "↑" : "↓"}
     </div>
   </div>
 );
 
-// Table row component
-const TableRow = ({ name, sales, revenue, trend }) => (
-  <tr className="border-b border-gray-100 hover:bg-gray-50">
-    <td className="py-3 px-2">
-      <span className="font-medium text-gray-800">{name}</span>
-    </td>
-    <td className="py-3 px-2 text-gray-600">{sales}</td>
-    <td className="py-3 px-2 text-gray-600">{revenue}</td>
-    <td className="py-3 px-2">
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-        trend >= 0 ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'
-      }`}>
-        {trend >= 0 ? '+' : ''}{trend}%
-      </span>
-    </td>
-  </tr>
-);
 
-export default MISDashboard;
+
+export default EnhancedMISDashboard;

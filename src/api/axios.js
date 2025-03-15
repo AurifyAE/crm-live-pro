@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const axiosInstance = axios.create({
-  baseURL: 'https://face2-backend.onrender.com/api/data', 
+  baseURL: 'http://localhost:3030/api/data', 
   headers: {
     'Content-Type': 'application/json',
   },

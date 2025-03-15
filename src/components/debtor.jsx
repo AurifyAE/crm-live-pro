@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Search, ChevronDown, Star, ChevronLeft, ChevronRight, Edit, Save, X, RefreshCw } from 'lucide-react';
+import { Search, ChevronDown, Star, ChevronLeft, ChevronRight, Edit, Save, X, RefreshCw, AlertTriangle, CheckCircle, AlertCircle, Mail } from 'lucide-react';
 import useMarketData from '../components/marketData';
 import axiosInstance from '../api/axios';
 
@@ -16,17 +16,23 @@ export default function DebtorManagement() {
   const [itemsPerPage] = useState(10);
   const [sortConfig, setSortConfig] = useState({ key: 'ACCODE', direction: 'ascending' });
   const [favoriteFilter, setFavoriteFilter] = useState(false);
+  // New state for risk filtering
+  const [riskFilter, setRiskFilter] = useState('all');
   
   // States for editing
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
+
+  // Message sending state
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [messageRecipient, setMessageRecipient] = useState(null);
   
   // Format numbers consistently
   const formatNumber = useCallback((num) => {
     return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }, []);
 
-  // Calculate user data with updated values
+  // Calculate user data with updated values and margin risk level
   const calculateUserData = useCallback((item, goldRate) => {
     const accBalance = parseFloat(item.AMOUNTFC) || 0;
     const metalWeight = parseFloat(item.METAL_WT) || 0;
@@ -39,6 +45,21 @@ export default function DebtorManagement() {
     const marginAmount = parseFloat(((netEquity * margin) / 100).toFixed(2));
     const totalNeeded = parseFloat((marginAmount + netEquity).toFixed(2));
     
+    // Calculate risk level based on actual vs required margin
+    // netEquity is what the customer has, marginAmount is what additional margin is required
+    // If netEquity is high compared to marginAmount, risk is low
+    const marginRatio = (marginAmount > 0 && netEquity > 0) ? netEquity / marginAmount : 0;
+   
+    // Determine risk level based on margin ratio
+    let riskLevel;
+    if (marginRatio >= 0.67) {
+      riskLevel = 'safe'; // High margin (67%-100%+) - Safe
+    } else if (marginRatio >= 0.34) {
+      riskLevel = 'moderate'; // Medium margin (34%-66%) - Moderate risk
+    } else {
+      riskLevel = 'high'; // Low margin (0%-33%) - High risk
+    }
+   
     return {
       id: item.ACCODE,
       name: item.ACCOUNT_HEAD,
@@ -50,8 +71,12 @@ export default function DebtorManagement() {
       netEquity,
       marginAmount,
       totalNeeded,
+      marginRatio,
+      riskLevel,
       accountType: item.Account_Type?.toLowerCase() || 'n/a',
-      favorite: item.is_favorite || false
+      favorite: item.is_favorite || false,
+      email: item.email || 'customer@example.com', // Assuming email field exists or default
+      phone: item.phone || 'N/A' // Assuming phone field exists or default
     };
   }, []);
   
@@ -62,7 +87,6 @@ export default function DebtorManagement() {
       const response = await axiosInstance.get('/fetch-data');
       if (response.data.status === 201) {
         // Process and transform the data - filter to only show DEBTOR account types
-        console.log(response.data.data);
         const transformedData = response.data.data
           .filter(item => 
             item.Account_Type && 
@@ -98,6 +122,17 @@ export default function DebtorManagement() {
           const netEquity = parseFloat((valueInAED + user.accBalance).toFixed(2));
           const marginAmount = parseFloat(((netEquity * user.margin) / 100).toFixed(2));
           const totalNeeded = parseFloat((marginAmount + netEquity).toFixed(2));
+          // Recalculate margin ratio and risk level
+          const marginRatio = (marginAmount > 0 && netEquity > 0) ? netEquity / marginAmount : 0;
+          
+          let riskLevel;
+          if (marginRatio >= 0.67) {
+            riskLevel = 'safe';
+          } else if (marginRatio >= 0.34) {
+            riskLevel = 'moderate';
+          } else {
+            riskLevel = 'high';
+          }
           
           return {
             ...user,
@@ -105,7 +140,9 @@ export default function DebtorManagement() {
             valueInAED,
             netEquity,
             marginAmount,
-            totalNeeded
+            totalNeeded,
+            marginRatio,
+            riskLevel
           };
         })
       );
@@ -145,10 +182,12 @@ export default function DebtorManagement() {
         user.name.toLowerCase().includes(search.toLowerCase()) || 
         user.id.toString().includes(search);
       const matchesFavorite = !favoriteFilter || user.favorite;
+      // Apply risk filter
+      const matchesRisk = riskFilter === 'all' || user.riskLevel === riskFilter;
       
-      return matchesSearch && matchesFavorite;
+      return matchesSearch && matchesFavorite && matchesRisk;
     });
-  }, [sortedDebtorUsers, search, favoriteFilter]);
+  }, [sortedDebtorUsers, search, favoriteFilter, riskFilter]);
 
   // Pagination
   const totalPages = useMemo(() => Math.ceil(filteredDebtorUsers.length / itemsPerPage), [filteredDebtorUsers, itemsPerPage]);
@@ -217,11 +256,25 @@ export default function DebtorManagement() {
               const updatedMarginAmount = (netEquity * newMargin) / 100;
               const updatedTotalNeeded = netEquity + updatedMarginAmount;
               
+              // Recalculate risk level
+              const marginRatio = netEquity > 0 ? netEquity / updatedMarginAmount : 0;
+              
+              let riskLevel;
+              if (marginRatio >= 0.67) {
+                riskLevel = 'safe';
+              } else if (marginRatio >= 0.34) {
+                riskLevel = 'moderate';
+              } else {
+                riskLevel = 'high';
+              }
+              
               return {
                 ...user, 
                 margin: newMargin,
                 marginAmount: updatedMarginAmount,
-                totalNeeded: updatedTotalNeeded
+                totalNeeded: updatedTotalNeeded,
+                marginRatio,
+                riskLevel
               };
             }
             return user;
@@ -243,6 +296,84 @@ export default function DebtorManagement() {
     setEditingId(null);
     setEditValue('');
   }, []);
+
+  // Start message sending
+  const openMessageModal = useCallback((user) => {
+    setMessageRecipient(user);
+    setSendingMessage(true);
+  }, []);
+
+  // Send message function
+  const sendMessage = useCallback(async (e) => {
+    e.preventDefault();
+    const message = e.target.message.value;
+    
+    if (!message || !messageRecipient) {
+      return;
+    }
+    
+    try {
+      // Here you would send the message to your backend
+      // For now, we'll just simulate success
+      console.log(`Sending message to ${messageRecipient.name}: ${message}`);
+      
+      // Simulate API call with timeout
+      setTimeout(() => {
+        setSendingMessage(false);
+        setMessageRecipient(null);
+        alert(`Message sent successfully to ${messageRecipient.name}`);
+      }, 1000);
+      
+      // Actual implementation would look like:
+      /*
+      const response = await axiosInstance.post('/send-message', {
+        recipient_id: messageRecipient.id,
+        message,
+        message_type: 'margin_warning'
+      });
+      
+      if (response.data.status === 200 || response.data.status === 201) {
+        setSendingMessage(false);
+        setMessageRecipient(null);
+        alert('Message sent successfully');
+      } else {
+        throw new Error('Failed to send message');
+      }
+      */
+    } catch (err) {
+      console.error('Error sending message:', err);
+      alert('Failed to send message. Please try again.');
+    }
+  }, [messageRecipient]);
+
+  // Risk indicator component
+  const RiskIndicator = ({ riskLevel }) => {
+    switch (riskLevel) {
+      case 'high':
+        return (
+          <div className="flex items-center text-red-600">
+            <AlertCircle className="h-4 w-4 mr-1" />
+            <span>High Risk</span>
+          </div>
+        );
+      case 'moderate':
+        return (
+          <div className="flex items-center text-amber-500">
+            <AlertTriangle className="h-4 w-4 mr-1" />
+            <span>Moderate</span>
+          </div>
+        );
+      case 'safe':
+        return (
+          <div className="flex items-center text-green-600">
+            <CheckCircle className="h-4 w-4 mr-1" />
+            <span>Safe</span>
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
 
   // Loading state
   if (loading && debtorUsers.length === 0) {
@@ -300,7 +431,26 @@ export default function DebtorManagement() {
         </div>
         <p className="text-sm text-gray-500 mt-1">Last updated: {new Date().toLocaleTimeString()}</p>
       </div>
-      
+       
+      {/* Risk Level Legend */}
+      <div className="mb-6 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+        <h3 className="text-base font-semibold text-gray-700 mb-2">Margin Risk Legend</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="flex items-center">
+            <div className="h-4 w-4 bg-red-600 rounded-full mr-2"></div>
+            <span className="text-sm text-gray-700">High Risk (0% - 33%)</span>
+          </div>
+          <div className="flex items-center">
+            <div className="h-4 w-4 bg-amber-500 rounded-full mr-2"></div>
+            <span className="text-sm text-gray-700">Moderate Risk (34% - 66%)</span>
+          </div>
+          <div className="flex items-center">
+            <div className="h-4 w-4 bg-green-600 rounded-full mr-2"></div>
+            <span className="text-sm text-gray-700">Safe (67% - 100%+)</span>
+          </div>
+        </div>
+      </div>
+
       {/* Search and Filter Controls */}
       <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
         <div className="relative flex-1 max-w-md w-full">
@@ -316,7 +466,21 @@ export default function DebtorManagement() {
           />
         </div>
         
-        <div className="flex gap-4 w-full sm:w-auto">
+        <div className="flex flex-wrap gap-4 w-full sm:w-auto">
+          {/* Risk Filter Dropdown */}
+          <div className="relative">
+            <select
+              value={riskFilter}
+              onChange={(e) => setRiskFilter(e.target.value)}
+              className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+            >
+              <option value="all">All Risks</option>
+              <option value="high">High Risk</option>
+              <option value="moderate">Moderate Risk</option>
+              <option value="safe">Safe</option>
+            </select>
+          </div>
+          
           <div className="flex items-center">
             <input
               type="checkbox"
@@ -340,14 +504,56 @@ export default function DebtorManagement() {
         </div>
       </div>
       
+      {/* Risk Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        {/* High Risk Card */}
+        <div className="bg-red-50 border border-red-200 p-4 rounded-lg shadow-sm">
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="text-lg font-medium text-red-800">High Risk Accounts</h3>
+              <p className="text-red-600 text-2xl font-bold mt-1">
+                {debtorUsers.filter(user => user.riskLevel === 'high').length}
+              </p>
+            </div>
+            <AlertCircle className="h-10 w-10 text-red-500" />
+          </div>
+        </div>
+        
+        {/* Moderate Risk Card */}
+        <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg shadow-sm">
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="text-lg font-medium text-amber-800">Moderate Risk Accounts</h3>
+              <p className="text-amber-600 text-2xl font-bold mt-1">
+                {debtorUsers.filter(user => user.riskLevel === 'moderate').length}
+              </p>
+            </div>
+            <AlertTriangle className="h-10 w-10 text-amber-500" />
+          </div>
+        </div>
+        
+        {/* Safe Card */}
+        <div className="bg-green-50 border border-green-200 p-4 rounded-lg shadow-sm">
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="text-lg font-medium text-green-800">Safe Accounts</h3>
+              <p className="text-green-600 text-2xl font-bold mt-1">
+                {debtorUsers.filter(user => user.riskLevel === 'safe').length}
+              </p>
+            </div>
+            <CheckCircle className="h-10 w-10 text-green-500" />
+          </div>
+        </div>
+      </div>
+      
       {/* Table Container with Overflow Handling */}
       <div className="rounded-lg shadow-sm bg-white">
         <div className="p-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-700">
-            Debtor Users ({debtorUsers.length})
+            Debtor Users ({filteredDebtorUsers.length}/{debtorUsers.length})
           </h2>
           <p className="text-sm text-gray-500">
-            Managing users with account type "DEBTOR"
+            {riskFilter !== 'all' ? `Filtered to show ${riskFilter} risk accounts` : 'Managing users with account type "DEBTOR"'}
           </p>
         </div>
         
@@ -358,7 +564,7 @@ export default function DebtorManagement() {
         ) : (
           <>
             {/* Responsive table container with both horizontal and vertical scrolling */}
-            <div className="overflow-auto max-h-[70vh]" style={{ WebkitOverflowScrolling: 'touch' }}>
+          <div className="overflow-auto max-h-[70vh]" style={{ WebkitOverflowScrolling: 'touch' }}>
               <table className="min-w-full divide-y divide-gray-200 table-fixed">
                 <thead className="bg-gray-100">
                   <tr>
@@ -377,15 +583,34 @@ export default function DebtorManagement() {
                     <TableHeader label="Margin %" sortKey="margin" />
                     <TableHeader label="Net Equity" sortKey="netEquity" />
                     <TableHeader label="Margin Amount" sortKey="marginAmount" />
-                    <TableHeader label="Total Needed" sortKey="totalNeeded" />
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer sticky top-0 bg-gray-100 z-10" onClick={() => requestSort('totalNeeded')}>
+                      <div className="flex items-center">
+                        Total Needed
+                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                          Risk Level
+                        </span>
+                      </div>
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer sticky top-0 bg-gray-100 z-10" onClick={() => requestSort('riskLevel')}>
+                      Risk Status
+                    </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-100 z-10">
-                      Favorite
+                      Actions
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {currentItems?.map((user) => (
-                    <tr key={user.id} className="hover:bg-gray-50">
+                    <tr 
+                      key={user.id} 
+                      className={`hover:bg-gray-50 ${
+                        user.riskLevel === 'high' 
+                          ? 'bg-red-50' 
+                          : user.riskLevel === 'moderate' 
+                            ? 'bg-amber-50' 
+                            : ''
+                      }`}
+                    >
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.id}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">{user.name}</div>
@@ -393,7 +618,7 @@ export default function DebtorManagement() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatNumber(user.accBalance)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatNumber(user.metalWeight)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <span className="font-medium text-green-600">{formatNumber(user.valueInAED)}</span>
+                        <span className="font-medium">{formatNumber(user.valueInAED)}</span>
                       </td>
                       
                       {/* Editable Margin Field */}
@@ -439,15 +664,46 @@ export default function DebtorManagement() {
                       
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatNumber(user.netEquity)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatNumber(user.marginAmount)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatNumber(user.totalNeeded)}</td>
                       
+                      {/* Total Needed with Risk Coloring */}
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <button 
-                          onClick={() => toggleFavorite(user.id)}
-                          className="text-gray-400 hover:text-yellow-500 focus:outline-none"
-                        >
-                          <Star className={`h-5 w-5 ${user.favorite ? 'text-yellow-500 fill-yellow-500' : 'text-gray-400'}`} />
-                        </button>
+                      <div className={`text-sm font-medium ${
+                          user.riskLevel === 'high' 
+                            ? 'text-red-600' 
+                            : user.riskLevel === 'moderate' 
+                              ? 'text-amber-500' 
+                              : 'text-green-600'
+                        }`}>
+                          {formatNumber(user.totalNeeded)}
+                        </div>
+                      </td>
+                      
+                      {/* Risk Status Column */}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <RiskIndicator riskLevel={user.riskLevel} />
+                      </td>
+                      
+                      {/* Actions Column */}
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex space-x-2">
+                          <button 
+                            onClick={() => toggleFavorite(user.id)}
+                            className="text-gray-400 hover:text-yellow-500 focus:outline-none"
+                          >
+                            <Star className={`h-5 w-5 ${user.favorite ? 'text-yellow-500 fill-yellow-500' : 'text-gray-400'}`} />
+                          </button>
+                          
+                          {/* Send Message Button for High Risk Users */}
+                          {user.riskLevel === 'high' && (
+                            <button
+                              onClick={() => openMessageModal(user)}
+                              className="text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 px-2 py-1 rounded flex items-center"
+                            >
+                              <Mail className="h-4 w-4 mr-1" />
+                              <span>Alert</span>
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -526,6 +782,76 @@ export default function DebtorManagement() {
           </>
         )}
       </div>
+      
+      {/* Message Modal */}
+      {sendingMessage && messageRecipient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium text-gray-900">
+                Send Alert to {messageRecipient.name}
+              </h3>
+              <button
+                onClick={() => {
+                  setSendingMessage(false);
+                  setMessageRecipient(null);
+                }}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
+              <div className="flex">
+                <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
+                <div>
+                  <h3 className="text-sm font-medium text-red-800">High Risk Account</h3>
+                  <div className="mt-1 text-sm text-red-700">
+                    <p>Current Margin: {messageRecipient.margin}%</p>
+                    <p>Net Equity: {formatNumber(messageRecipient.netEquity)}</p>
+                    <p>Margin Amount: {formatNumber(messageRecipient.marginAmount)}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <form onSubmit={sendMessage}>
+              <div className="mb-4">
+                <label htmlFor="message" className="block text-sm font-medium text-gray-700">
+                  Message
+                </label>
+                <textarea
+                  id="message"
+                  name="message"
+                  rows={4}
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  defaultValue={`Dear ${messageRecipient.name},\n\nThis is to inform you that your account requires immediate attention. Your current margin level is below the required threshold. Please deposit additional funds or reduce your positions to meet the margin requirements.\n\nRegards,\nRisk Management Team`}
+                />
+              </div>
+              
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSendingMessage(false);
+                    setMessageRecipient(null);
+                  }}
+                  className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                >
+                  Send Alert
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
