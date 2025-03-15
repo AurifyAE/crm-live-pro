@@ -183,7 +183,7 @@ export default function BankManagement() {
 
   return (
     <div className="p-6 w-full bg-gray-50 rounded-lg shadow">
-      <h1 className="text-3xl font-bold text-gray-800 mb-6">Bank Account Management</h1>
+      <h1 className="text-3xl font-bold text-gray-800 mb-6">Bank  Management</h1>
       
       {/* Total Balance Summary */}
       <div className="mb-6 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
