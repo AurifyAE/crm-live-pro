@@ -87,7 +87,7 @@ const NotFound = () => {
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.8, duration: 0.8 }}
           >
-            <Link to="/">
+            <Link to="/dashboard">
               <motion.button
                 whileHover={{ scale: 1.02, backgroundColor: "#3b82f6" }}
                 whileTap={{ scale: 0.98 }}
