@@ -2,7 +2,7 @@ import axios from 'axios';
 import axiosRetry from 'axios-retry';
 
 const axiosInstance = axios.create({
-  baseURL: 'http://localhost:3030/api/data',
+  baseURL: 'https://face2-backend.onrender.com/api/data',
   headers: {
     'Content-Type': 'application/json',
     'Connection': 'keep-alive',
