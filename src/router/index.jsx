@@ -8,10 +8,12 @@ import BankPage from "../pages/bankPage";
 import CashFlowPage from "../pages/cashFlowPage";
 import AnalysisPage from "../pages/analysisPage";
 import NotFound from "../components/notFound"; 
+import Login from "../components/login"
 export default function UserRouter() {
   return (
     <Routes>
-      <Route path="/" element={<HomePage />} />
+      <Route path="/" element={<Login />} />
+      <Route path="/dashboard" element={<HomePage />} />
       <Route path="/debtor" element={<DebtorPage />} />
       <Route path="/user-data" element={<AllUsersPage />} />
       <Route path="/liquidity-provider" element={<LpPage />} />

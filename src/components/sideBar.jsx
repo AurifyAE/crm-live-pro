@@ -1,5 +1,7 @@
 import React from "react";
-import { useLocation, Link } from "react-router-dom";
+import { useLocation, Link, useNavigate } from "react-router-dom";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import { 
   LayoutDashboard, 
   Wallet,
@@ -18,6 +20,36 @@ import logo from '../assets/logo.jpg';
 
 const Sidebar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+
+  // Logout handler function
+  const handleLogout = (e) => {
+    e.preventDefault(); // Prevent default navigation
+    
+    // Show logout in progress toast
+    toast.info('Logging out...', {
+      position: 'top-right',
+      autoClose: 1500,
+    });
+    
+    // Clear all authentication data
+    localStorage.removeItem('token');
+    localStorage.removeItem('userName');
+    localStorage.removeItem('adminId');
+    localStorage.removeItem('rememberMe');
+    
+    // Add small delay for visual feedback
+    setTimeout(() => {
+      // Show success message
+      toast.success('Logged out successfully', {
+        position: 'top-right',
+        autoClose: 2000,
+      });
+      
+      // Navigate to login page
+      navigate('/');
+    }, 800);
+  };
 
   return (
     <div className="w-64 bg-white shadow-lg flex flex-col p-5">
@@ -31,8 +63,8 @@ const Sidebar = () => {
         <SidebarItem 
           icon={<LayoutDashboard strokeWidth={1.5} size={22} />} 
           text="Dashboard" 
-          to="/" 
-          active={location.pathname === "/"} 
+          to="/dashboard"
+          active={location.pathname === "/dashboard"} 
         />
         <SidebarItem 
           icon={<Wallet strokeWidth={1.5} size={22} />} 
@@ -93,14 +125,21 @@ const Sidebar = () => {
             to="/help-center" 
             active={location.pathname === "/help-center"} 
           />
-          <SidebarItem 
-            icon={<LogOut strokeWidth={1.5} size={22} />} 
-            text="Log Out" 
-            to="/logout" 
-            active={location.pathname === "/logout"} 
-          />
+          {/* Special logout item with onClick handler */}
+          <div onClick={handleLogout} className="no-underline">
+            <div
+              className={`flex relative items-center gap-3 p-3 w-64 rounded-xl cursor-pointer transition-all 
+              text-slate-700 hover:bg-slate-100`}
+            >
+              <LogOut strokeWidth={1.5} size={22} />
+              <span className="font-medium">Log Out</span>
+            </div>
+          </div>
         </div>
       </nav>
+      
+      {/* Add ToastContainer for notifications */}
+      <ToastContainer />
     </div>
   );
 };
