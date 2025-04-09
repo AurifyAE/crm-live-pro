@@ -105,7 +105,7 @@ export default function LiquidityProviderManagement() {
     try {
       setLoading(true);
       const response = await axiosInstance.get("/fetch-data");
-      if (response.data.status === 201) {
+      if (response.data.status === 200) {
         // Process and transform the data - filter to only show LP account types
         const transformedData = response.data.data
           .filter(item => item.Account_Type && item.Account_Type.toLowerCase() === "lp")
