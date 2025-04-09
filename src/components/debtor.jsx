@@ -85,7 +85,7 @@ export default function DebtorManagement() {
     try {
       setLoading(true);
       const response = await axiosInstance.get('/fetch-data');
-      if (response.data.status === 201) {
+      if (response.data.status === 200) {
         // Process and transform the data - filter to only show DEBTOR account types
         const transformedData = response.data.data
           .filter(item => 

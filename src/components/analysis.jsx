@@ -486,7 +486,7 @@ export default function HypotheticalAnalysis() {
     try {
       setLoading(true);
       const response = await axiosInstance.get("/fetch-data");
-      if (response.data.status === 201) {
+      if (response.data.status === 200) {
         setOriginalUsers(response.data.data);
       } else {
         setError("Failed to fetch data");

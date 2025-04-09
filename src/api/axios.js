@@ -8,7 +8,6 @@ const axiosInstance = axios.create({
     'Connection': 'keep-alive',
   },
   withCredentials: true,
-  timeout: 15000,
 });
 
 // Retry failed requests up to 3 times with exponential backoff

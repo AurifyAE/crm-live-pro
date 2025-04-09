@@ -62,7 +62,7 @@ export default function AllUsers() {
     try {
       setLoading(true);
       const response = await axiosInstance.get('/fetch-data');
-      if (response.data.status === 201) {
+      if (response.data.status === 200) {
         // Process and transform the data
         console.log(response.data.data);
         const transformedData = response.data.data

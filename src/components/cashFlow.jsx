@@ -170,7 +170,7 @@ const calculateRiskLevel = useCallback((accountType, marginRatio) => {
     try {
       setLoading(true);
       const response = await axiosInstance.get("/fetch-data");
-      if (response.data.status === 201) {
+      if (response.data.status === 200) {
         // Process and transform the data
         const transformedData = response.data.data.map((item) =>
           calculateUserData(item, liveRate)
