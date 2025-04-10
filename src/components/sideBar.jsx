@@ -13,7 +13,8 @@ import {
   Database,
   BarChart3,
   Shield,
-  Settings
+  Settings,
+  UserCog
 } from "lucide-react";
 
 import logo from '../assets/logo.jpg';
@@ -101,6 +102,12 @@ const Sidebar = () => {
           text="Analysis" 
           to="/analysis" 
           active={location.pathname === "/analysis"} 
+        />
+           <SidebarItem 
+          icon={<UserCog strokeWidth={1.5} size={22} />} 
+          text="User Management" 
+          to="/user-management" 
+          active={location.pathname === "/user-management"} 
         />
         {/* Company Pages Section */}
         <div className="mt-5 text-gray-400 text-sm font-medium">COMPANY PAGES</div>
