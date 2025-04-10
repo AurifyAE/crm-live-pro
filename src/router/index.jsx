@@ -10,6 +10,7 @@ import AnalysisPage from "../pages/analysisPage";
 import NotFound from "../components/notFound"; 
 import Login from "../components/login"
 import UserManagePage from "../pages/userManagePage";
+import Loading from '../components/loading'
 export default function UserRouter() {
   return (
     <Routes>
@@ -21,7 +22,7 @@ export default function UserRouter() {
       <Route path="/bank" element={<BankPage />} />
       <Route path="/cash-flow" element={<CashFlowPage />} />
       <Route path="/analysis" element={<AnalysisPage />} />
-      <Route path="/admin/user-management" element={<UserManagePage />} />
+      <Route path="/user-management" element={<UserManagePage />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
