@@ -1,14 +1,13 @@
 import React from 'react'
 import Sidebar from '../components/sideBar';
-import UserManagement   from '../components/userManage';
-export default function userManagePage() {
+import Statement from '../components/Statements';
+export default function statementPage() {
     return (
         <>
         <div className='flex'>
         <Sidebar/>
-        <UserManagement/>
+        <Statement/>
         </div>
-        
         </>
       );
 }

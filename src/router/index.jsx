@@ -10,7 +10,9 @@ import AnalysisPage from "../pages/analysisPage";
 import NotFound from "../components/notFound"; 
 import Login from "../components/login"
 import UserManagePage from "../pages/userManagePage";
-import Loading from '../components/loading'
+import ProfilePage from '../pages/ProfilePage'
+import Trading from '../pages/TradingPage'
+import Statement from '../pages/statementPage'
 export default function UserRouter() {
   return (
     <Routes>
@@ -23,6 +25,9 @@ export default function UserRouter() {
       <Route path="/cash-flow" element={<CashFlowPage />} />
       <Route path="/analysis" element={<AnalysisPage />} />
       <Route path="/user-management" element={<UserManagePage />} />
+      <Route path="/trading" element={<Trading />} />
+      <Route path="/statements" element={<Statement />} />
+      <Route path="/profile/:userId" element={<ProfilePage />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

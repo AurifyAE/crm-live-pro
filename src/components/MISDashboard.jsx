@@ -37,12 +37,14 @@ import {
 } from "recharts";
 import useMarketData from "../components/marketData";
 import axiosInstance from "../api/axios";
+const adminId = localStorage.getItem("adminId");
 
 // Dashboard component
 const EnhancedMISDashboard = () => {
   const [activeTab, setActiveTab] = useState("risk");
   const [accountType, setAccountType] = useState("all");
   const [accountData, setAccountData] = useState([]);
+  console.log(accountData)
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [liveRate, setLiveRate] = useState(0);
@@ -50,6 +52,7 @@ const EnhancedMISDashboard = () => {
   const [selectedBank, setSelectedBank] = useState("");
 
   const { marketData } = useMarketData(["GOLD"]);
+console.log(marketData);
 
   // Calculate risk level based on account type
   const calculateRiskLevel = useCallback((item, accountType) => {
@@ -143,7 +146,8 @@ const EnhancedMISDashboard = () => {
   const fetchAccountData = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await axiosInstance.get("/fetch-data");
+      const response = await axiosInstance.get(`/fetch-data/${adminId}`);
+
       if (response.data.status === 200) {
         // Process and transform all data
         const transformedData = response.data.data.map((item) =>

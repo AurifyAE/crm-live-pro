@@ -14,7 +14,9 @@ import {
   BarChart3,
   Shield,
   Settings,
-  UserCog
+  UserCog,
+  FileText,
+  TrendingUp
 } from "lucide-react";
 
 import logo from '../assets/logo.jpg';
@@ -86,6 +88,18 @@ const Sidebar = () => {
           active={location.pathname === "/debtor"} 
         />
         <SidebarItem 
+          icon={<FileText strokeWidth={1.5} size={22} />} 
+          text="Statements" 
+          to="/statements" 
+          active={location.pathname === "/statements"} 
+        />
+        <SidebarItem 
+          icon={<TrendingUp strokeWidth={1.5} size={22} />} 
+          text="Trading" 
+          to="/trading" 
+          active={location.pathname === "/trading"} 
+        />
+        <SidebarItem 
           icon={<Database strokeWidth={1.5} size={22} />} 
           text="User Data" 
           to="/user-data" 
@@ -103,7 +117,7 @@ const Sidebar = () => {
           to="/analysis" 
           active={location.pathname === "/analysis"} 
         />
-           <SidebarItem 
+        <SidebarItem 
           icon={<UserCog strokeWidth={1.5} size={22} />} 
           text="User Management" 
           to="/user-management" 

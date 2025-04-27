@@ -31,6 +31,7 @@ import {
 } from "recharts";
 import useMarketData from "../components/marketData";
 import axiosInstance from "../api/axios";
+const adminId = localStorage.getItem("adminId");
 
 export default function CashFlowManagement() {
   const { marketData } = useMarketData(["GOLD"]);
@@ -96,27 +97,27 @@ export default function CashFlowManagement() {
   }, []);
 
   // Calculate risk level based on account type and margin ratio
-// Calculate risk level based on account type and margin ratio
-const calculateRiskLevel = useCallback((accountType, marginRatio) => {
-  if (!accountType) return "N/A";
-  
-  switch (accountType.toLowerCase()) {
-    case "lp":
-      // Inverted risk calculation for LP accounts
-      if (marginRatio <= 0.33) return "safe";
-      if (marginRatio <= 0.66) return "moderate";
-      return "high";
-    case "debtor":
-      // Standard risk calculation for Debtors
-      if (marginRatio >= 0.67) return "safe";
-      if (marginRatio >= 0.34) return "moderate";
-      return "high";
-    case "bank":
-      return "N/A"; // Bank accounts don't have risk levels
-    default:
-      return "N/A";
-  }
-}, []);
+  // Calculate risk level based on account type and margin ratio
+  const calculateRiskLevel = useCallback((accountType, marginRatio) => {
+    if (!accountType) return "N/A";
+
+    switch (accountType.toLowerCase()) {
+      case "lp":
+        // Inverted risk calculation for LP accounts
+        if (marginRatio <= 0.33) return "safe";
+        if (marginRatio <= 0.66) return "moderate";
+        return "high";
+      case "debtor":
+        // Standard risk calculation for Debtors
+        if (marginRatio >= 0.67) return "safe";
+        if (marginRatio >= 0.34) return "moderate";
+        return "high";
+      case "bank":
+        return "N/A"; // Bank accounts don't have risk levels
+      default:
+        return "N/A";
+    }
+  }, []);
 
   // Calculate user data with updated values and margin risk level
   const calculateUserData = useCallback(
@@ -169,7 +170,7 @@ const calculateRiskLevel = useCallback((accountType, marginRatio) => {
   const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await axiosInstance.get("/fetch-data");
+      const response = await axiosInstance.get(`/fetch-data/${adminId}`);
       if (response.data.status === 200) {
         // Process and transform the data
         const transformedData = response.data.data.map((item) =>
@@ -191,97 +192,102 @@ const calculateRiskLevel = useCallback((accountType, marginRatio) => {
   }, [liveRate, calculateUserData]);
 
   // Calculate summary statistics
-// Calculate summary statistics
-const calculateSummaryStats = useCallback((userData) => {
-  // Filter accounts by type
-  const bankAccounts = userData.filter((user) => user.accountType === "bank");
-  const debtorAccounts = userData.filter((user) => user.accountType === "debtor");
-  const lpAccounts = userData.filter((user) => user.accountType === "lp");
-  
-  // Only include LP and debtor accounts for risk and surplus/deficit calculations
-  const applicableAccounts = userData.filter(
-    (user) => user.accountType === "lp" || user.accountType === "debtor"
-  );
-  
-  // Only calculate surplus/deficit for LP and debtor accounts
-  const surplusAccounts = applicableAccounts.filter((user) => user.surplusDeficit > 0);
-  const deficitAccounts = applicableAccounts.filter((user) => user.surplusDeficit < 0);
+  // Calculate summary statistics
+  const calculateSummaryStats = useCallback((userData) => {
+    // Filter accounts by type
+    const bankAccounts = userData.filter((user) => user.accountType === "bank");
+    const debtorAccounts = userData.filter(
+      (user) => user.accountType === "debtor"
+    );
+    const lpAccounts = userData.filter((user) => user.accountType === "lp");
 
-  // Calculate totals by account type
-  const totalBankBalance = bankAccounts.reduce(
-    (sum, user) => sum + user.accBalance,
-    0
-  );
-  const totalDebtorEquity = debtorAccounts.reduce(
-    (sum, user) => sum + user.netEquity,
-    0
-  );
-  const totalLPEquity = lpAccounts.reduce(
-    (sum, user) => sum + user.netEquity,
-    0
-  );
+    // Only include LP and debtor accounts for risk and surplus/deficit calculations
+    const applicableAccounts = userData.filter(
+      (user) => user.accountType === "lp" || user.accountType === "debtor"
+    );
 
-  // Calculate surplus/deficit metrics only for applicable accounts
-  const surplusMargin = surplusAccounts.reduce(
-    (sum, user) => sum + user.surplusDeficit,
-    0
-  );
-  const deficitMargin = Math.abs(
-    deficitAccounts.reduce((sum, user) => sum + user.surplusDeficit, 0)
-  );
+    // Only calculate surplus/deficit for LP and debtor accounts
+    const surplusAccounts = applicableAccounts.filter(
+      (user) => user.surplusDeficit > 0
+    );
+    const deficitAccounts = applicableAccounts.filter(
+      (user) => user.surplusDeficit < 0
+    );
 
-  // Calculate risk counts separately for LP and debtor accounts
-  const lpHighRiskCount = lpAccounts.filter(
-    (user) => user.riskLevel === "high"
-  ).length;
-  const lpModerateRiskCount = lpAccounts.filter(
-    (user) => user.riskLevel === "moderate"
-  ).length;
-  const lpSafeRiskCount = lpAccounts.filter(
-    (user) => user.riskLevel === "safe"
-  ).length;
-  
-  const debtorHighRiskCount = debtorAccounts.filter(
-    (user) => user.riskLevel === "high"
-  ).length;
-  const debtorModerateRiskCount = debtorAccounts.filter(
-    (user) => user.riskLevel === "moderate"
-  ).length;
-  const debtorSafeRiskCount = debtorAccounts.filter(
-    (user) => user.riskLevel === "safe"
-  ).length;
+    // Calculate totals by account type
+    const totalBankBalance = bankAccounts.reduce(
+      (sum, user) => sum + user.accBalance,
+      0
+    );
+    const totalDebtorEquity = debtorAccounts.reduce(
+      (sum, user) => sum + user.netEquity,
+      0
+    );
+    const totalLPEquity = lpAccounts.reduce(
+      (sum, user) => sum + user.netEquity,
+      0
+    );
 
-  // Combined risk counts
-  const highRiskCount = lpHighRiskCount + debtorHighRiskCount;
-  const moderateRiskCount = lpModerateRiskCount + debtorModerateRiskCount;
-  const safeRiskCount = lpSafeRiskCount + debtorSafeRiskCount;
+    // Calculate surplus/deficit metrics only for applicable accounts
+    const surplusMargin = surplusAccounts.reduce(
+      (sum, user) => sum + user.surplusDeficit,
+      0
+    );
+    const deficitMargin = Math.abs(
+      deficitAccounts.reduce((sum, user) => sum + user.surplusDeficit, 0)
+    );
 
-  setSummaryStats({
-    totalBankBalance,
-    totalDebtorEquity,
-    totalLPEquity,
-    highRiskCount,
-    moderateRiskCount,
-    safeRiskCount,
-    // Separate LP and debtor risk counts
-    lpHighRiskCount,
-    lpModerateRiskCount,
-    lpSafeRiskCount,
-    debtorHighRiskCount,
-    debtorModerateRiskCount,
-    debtorSafeRiskCount,
-    // Surplus/deficit metrics
-    surplusMargin,
-    deficitMargin,
-    surplusAccounts: surplusAccounts.length,
-    deficitAccounts: deficitAccounts.length,
-    averageSurplus:
-      surplusAccounts.length > 0 ? surplusMargin / surplusAccounts.length : 0,
-    averageDeficit:
-      deficitAccounts.length > 0 ? deficitMargin / deficitAccounts.length : 0,
-  });
-}, []);
+    // Calculate risk counts separately for LP and debtor accounts
+    const lpHighRiskCount = lpAccounts.filter(
+      (user) => user.riskLevel === "high"
+    ).length;
+    const lpModerateRiskCount = lpAccounts.filter(
+      (user) => user.riskLevel === "moderate"
+    ).length;
+    const lpSafeRiskCount = lpAccounts.filter(
+      (user) => user.riskLevel === "safe"
+    ).length;
 
+    const debtorHighRiskCount = debtorAccounts.filter(
+      (user) => user.riskLevel === "high"
+    ).length;
+    const debtorModerateRiskCount = debtorAccounts.filter(
+      (user) => user.riskLevel === "moderate"
+    ).length;
+    const debtorSafeRiskCount = debtorAccounts.filter(
+      (user) => user.riskLevel === "safe"
+    ).length;
+
+    // Combined risk counts
+    const highRiskCount = lpHighRiskCount + debtorHighRiskCount;
+    const moderateRiskCount = lpModerateRiskCount + debtorModerateRiskCount;
+    const safeRiskCount = lpSafeRiskCount + debtorSafeRiskCount;
+
+    setSummaryStats({
+      totalBankBalance,
+      totalDebtorEquity,
+      totalLPEquity,
+      highRiskCount,
+      moderateRiskCount,
+      safeRiskCount,
+      // Separate LP and debtor risk counts
+      lpHighRiskCount,
+      lpModerateRiskCount,
+      lpSafeRiskCount,
+      debtorHighRiskCount,
+      debtorModerateRiskCount,
+      debtorSafeRiskCount,
+      // Surplus/deficit metrics
+      surplusMargin,
+      deficitMargin,
+      surplusAccounts: surplusAccounts.length,
+      deficitAccounts: deficitAccounts.length,
+      averageSurplus:
+        surplusAccounts.length > 0 ? surplusMargin / surplusAccounts.length : 0,
+      averageDeficit:
+        deficitAccounts.length > 0 ? deficitMargin / deficitAccounts.length : 0,
+    });
+  }, []);
 
   // Initial data fetch
   useEffect(() => {
@@ -289,54 +295,58 @@ const calculateSummaryStats = useCallback((userData) => {
   }, [fetchUsers]);
 
   // Update calculations when market data changes
-useEffect(() => {
-  if (marketData?.bid) {
-    const calculatedRate = parseFloat(
-      ((marketData.bid / 31.103) * 3.674).toFixed(2)
-    );
-    setLiveRate(calculatedRate);
-
-    // Update users with new gold rate
-    setUsers(prevUsers => prevUsers.map((user) => {
-      const valueInAED = parseFloat(
-        (calculatedRate * user.metalWeight).toFixed(2)
+  useEffect(() => {
+    if (marketData?.bid) {
+      const calculatedRate = parseFloat(
+        ((marketData.bid / 31.103) * 3.674).toFixed(2)
       );
-      const netEquity = parseFloat((valueInAED + user.accBalance).toFixed(2));
-      const marginAmount = parseFloat(
-        ((netEquity * user.margin) / 100).toFixed(2)
+      setLiveRate(calculatedRate);
+
+      // Update users with new gold rate
+      setUsers((prevUsers) =>
+        prevUsers.map((user) => {
+          const valueInAED = parseFloat(
+            (calculatedRate * user.metalWeight).toFixed(2)
+          );
+          const netEquity = parseFloat(
+            (valueInAED + user.accBalance).toFixed(2)
+          );
+          const marginAmount = parseFloat(
+            ((netEquity * user.margin) / 100).toFixed(2)
+          );
+          const surplusDeficit = netEquity - marginAmount;
+
+          // Calculate margin ratio based on account type
+          let marginRatio = 0;
+          if (user.accountType === "lp") {
+            marginRatio = netEquity > 0 ? marginAmount / netEquity : 0;
+          } else if (user.accountType === "debtor") {
+            marginRatio = marginAmount > 0 ? netEquity / marginAmount : 0;
+          }
+
+          const riskLevel = calculateRiskLevel(user.accountType, marginRatio);
+
+          return {
+            ...user,
+            goldratevalueInAED: calculatedRate,
+            valueInAED,
+            netEquity,
+            marginAmount,
+            surplusDeficit,
+            marginRatio,
+            riskLevel,
+          };
+        })
       );
-      const surplusDeficit = netEquity - marginAmount;
+    }
+  }, [marketData?.bid, calculateRiskLevel]);
 
-      // Calculate margin ratio based on account type
-      let marginRatio = 0;
-      if (user.accountType === "lp") {
-        marginRatio = netEquity > 0 ? marginAmount / netEquity : 0;
-      } else if (user.accountType === "debtor") {
-        marginRatio = marginAmount > 0 ? netEquity / marginAmount : 0;
-      }
-
-      const riskLevel = calculateRiskLevel(user.accountType, marginRatio);
-
-      return {
-        ...user,
-        goldratevalueInAED: calculatedRate,
-        valueInAED,
-        netEquity,
-        marginAmount,
-        surplusDeficit,
-        marginRatio,
-        riskLevel,
-      };
-    }));
-  }
-}, [marketData?.bid, calculateRiskLevel]);
-
-// Separate effect for summary stats that depends on users
-useEffect(() => {
-  if (users.length > 0) {
-    calculateSummaryStats(users);
-  }
-}, [users, calculateSummaryStats]);
+  // Separate effect for summary stats that depends on users
+  useEffect(() => {
+    if (users.length > 0) {
+      calculateSummaryStats(users);
+    }
+  }, [users, calculateSummaryStats]);
 
   // Sort function
   const requestSort = useCallback(
@@ -378,60 +388,79 @@ useEffect(() => {
         search === "" ||
         user.name.toLowerCase().includes(search.toLowerCase()) ||
         user.id.toString().includes(search);
-  
+
       // Favorite filter
       const matchesFavorite = !favoriteFilter || user.favorite;
-  
+
       // Account type filter
       const matchesAccountType =
         accountTypeFilter === "all" || user.accountType === accountTypeFilter;
-  
+
       // Risk level filter
       const matchesRisk = riskFilter === "all" || user.riskLevel === riskFilter;
-  
+
       // Margin filter (surplus/deficit) - only apply to LP and debtor accounts
       const matchesMargin =
         marginFilter === "all" ||
-        (user.accountType !== "bank" && (
-          (marginFilter === "surplus" && user.surplusDeficit > 0) ||
-          (marginFilter === "deficit" && user.surplusDeficit < 0)
-        ));
-  
+        (user.accountType !== "bank" &&
+          ((marginFilter === "surplus" && user.surplusDeficit > 0) ||
+            (marginFilter === "deficit" && user.surplusDeficit < 0)));
+
       // Card selection filter - updated to handle all card types
       // Card selection filter - updated to handle all card types and show only LP/debtor for surplus/deficit
-const matchesSelectedCard =
-  !selectedCard ||
-  // General risk levels
-  (selectedCard === "high" && user.riskLevel === "high") ||
-  (selectedCard === "moderate" && user.riskLevel === "moderate") ||
-  (selectedCard === "safe" && user.riskLevel === "safe") ||
-  
-  // LP-specific risk levels
-  (selectedCard === "lpHigh" && user.accountType === "lp" && user.riskLevel === "high") ||
-  (selectedCard === "lpModerate" && user.accountType === "lp" && user.riskLevel === "moderate") ||
-  (selectedCard === "lpSafe" && user.accountType === "lp" && user.riskLevel === "safe") ||
-  
-  // Debtor-specific risk levels
-  (selectedCard === "debtorHigh" && user.accountType === "debtor" && user.riskLevel === "high") ||
-  (selectedCard === "debtorModerate" && user.accountType === "debtor" && user.riskLevel === "moderate") ||
-  (selectedCard === "debtorSafe" && user.accountType === "debtor" && user.riskLevel === "safe") ||
-  
-  // Surplus/deficit filters - only show LP and debtor accounts
-  (selectedCard === "surplus" && (user.accountType === "lp" || user.accountType === "debtor") && user.surplusDeficit > 0) ||
-  (selectedCard === "deficit" && (user.accountType === "lp" || user.accountType === "debtor") && user.surplusDeficit < 0) ||
-  
-  // Account type and equity filters
-  (selectedCard === "debtorEquity" && user.accountType === "debtor") ||
-  (selectedCard === "lpEquity" && user.accountType === "lp") ||
-  (selectedCard === "bankBalance" && user.accountType === "bank") ||
-  
-  // Advanced filters - only show LP and debtor accounts
-  (selectedCard === "totalSurplus" && (user.accountType === "lp" || user.accountType === "debtor") && user.surplusDeficit > 0) ||
-  (selectedCard === "totalDeficit" && (user.accountType === "lp" || user.accountType === "debtor") && user.surplusDeficit < 0) ||
-  (selectedCard === "avgSurplus" && (user.accountType === "lp" || user.accountType === "debtor") && user.surplusDeficit > 0) ||
-  (selectedCard === "avgDeficit" && (user.accountType === "lp" || user.accountType === "debtor") && user.surplusDeficit < 0) ||
-  (selectedCard === "netPosition" && (user.accountType === "lp" || user.accountType === "debtor"));
-  
+      const matchesSelectedCard =
+        !selectedCard ||
+        // General risk levels
+        (selectedCard === "high" && user.riskLevel === "high") ||
+        (selectedCard === "moderate" && user.riskLevel === "moderate") ||
+        (selectedCard === "safe" && user.riskLevel === "safe") ||
+        // LP-specific risk levels
+        (selectedCard === "lpHigh" &&
+          user.accountType === "lp" &&
+          user.riskLevel === "high") ||
+        (selectedCard === "lpModerate" &&
+          user.accountType === "lp" &&
+          user.riskLevel === "moderate") ||
+        (selectedCard === "lpSafe" &&
+          user.accountType === "lp" &&
+          user.riskLevel === "safe") ||
+        // Debtor-specific risk levels
+        (selectedCard === "debtorHigh" &&
+          user.accountType === "debtor" &&
+          user.riskLevel === "high") ||
+        (selectedCard === "debtorModerate" &&
+          user.accountType === "debtor" &&
+          user.riskLevel === "moderate") ||
+        (selectedCard === "debtorSafe" &&
+          user.accountType === "debtor" &&
+          user.riskLevel === "safe") ||
+        // Surplus/deficit filters - only show LP and debtor accounts
+        (selectedCard === "surplus" &&
+          (user.accountType === "lp" || user.accountType === "debtor") &&
+          user.surplusDeficit > 0) ||
+        (selectedCard === "deficit" &&
+          (user.accountType === "lp" || user.accountType === "debtor") &&
+          user.surplusDeficit < 0) ||
+        // Account type and equity filters
+        (selectedCard === "debtorEquity" && user.accountType === "debtor") ||
+        (selectedCard === "lpEquity" && user.accountType === "lp") ||
+        (selectedCard === "bankBalance" && user.accountType === "bank") ||
+        // Advanced filters - only show LP and debtor accounts
+        (selectedCard === "totalSurplus" &&
+          (user.accountType === "lp" || user.accountType === "debtor") &&
+          user.surplusDeficit > 0) ||
+        (selectedCard === "totalDeficit" &&
+          (user.accountType === "lp" || user.accountType === "debtor") &&
+          user.surplusDeficit < 0) ||
+        (selectedCard === "avgSurplus" &&
+          (user.accountType === "lp" || user.accountType === "debtor") &&
+          user.surplusDeficit > 0) ||
+        (selectedCard === "avgDeficit" &&
+          (user.accountType === "lp" || user.accountType === "debtor") &&
+          user.surplusDeficit < 0) ||
+        (selectedCard === "netPosition" &&
+          (user.accountType === "lp" || user.accountType === "debtor"));
+
       return (
         matchesSearch &&
         matchesFavorite &&
@@ -497,40 +526,40 @@ const matchesSelectedCard =
   }, []);
 
   // Risk indicator component
-// Risk indicator component
-const RiskIndicator = ({ riskLevel }) => {
-  const riskConfig = {
-    high: {
-      color: "text-red-600",
-      icon: <AlertCircle className="h-4 w-4 mr-1" />,
-      text: "High Risk",
-    },
-    moderate: {
-      color: "text-amber-500",
-      icon: <AlertTriangle className="h-4 w-4 mr-1" />,
-      text: "Moderate",
-    },
-    safe: {
-      color: "text-green-600",
-      icon: <CheckCircle className="h-4 w-4 mr-1" />,
-      text: "Safe",
-    },
-    "N/A": {
-      color: "text-gray-400",
-      icon: <Info className="h-4 w-4 mr-1" />,
-      text: "N/A",
-    },
+  // Risk indicator component
+  const RiskIndicator = ({ riskLevel }) => {
+    const riskConfig = {
+      high: {
+        color: "text-red-600",
+        icon: <AlertCircle className="h-4 w-4 mr-1" />,
+        text: "High Risk",
+      },
+      moderate: {
+        color: "text-amber-500",
+        icon: <AlertTriangle className="h-4 w-4 mr-1" />,
+        text: "Moderate",
+      },
+      safe: {
+        color: "text-green-600",
+        icon: <CheckCircle className="h-4 w-4 mr-1" />,
+        text: "Safe",
+      },
+      "N/A": {
+        color: "text-gray-400",
+        icon: <Info className="h-4 w-4 mr-1" />,
+        text: "N/A",
+      },
+    };
+
+    const config = riskConfig[riskLevel] || riskConfig["N/A"];
+
+    return (
+      <div className={`flex items-center ${config.color}`}>
+        {config.icon}
+        <span>{config.text}</span>
+      </div>
+    );
   };
-
-  const config = riskConfig[riskLevel] || riskConfig["N/A"];
-
-  return (
-    <div className={`flex items-center ${config.color}`}>
-      {config.icon}
-      <span>{config.text}</span>
-    </div>
-  );
-};
 
   // Create chart data
   const chartData = useMemo(() => {
@@ -597,24 +626,11 @@ const RiskIndicator = ({ riskLevel }) => {
   // Loading state
   if (loading && users.length === 0) {
     return (
-      <div className="p-6 max-w-full bg-gray-50 rounded-lg shadow flex justify-center items-center h-64">
-        <p className="text-lg text-gray-600">Loading cash flow data...</p>
-      </div>
-    );
-  }
-
-  // Error state
-  if (error && users.length === 0) {
-    return (
-      <div className="p-6 max-w-full bg-gray-50 rounded-lg shadow flex flex-col justify-center items-center h-64">
-        <p className="text-lg text-red-600 mb-4">{error}</p>
-        <button
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-          onClick={fetchUsers}
-        >
-          <RefreshCw className="h-4 w-4 mr-2 inline" />
-          Retry
-        </button>
+      <div className="fixed inset-0 flex justify-center items-center bg-white">
+        <div className="flex flex-col items-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600"></div>
+          <p className="mt-4 text-gray-600">Loading accounts...</p>
+        </div>
       </div>
     );
   }
@@ -663,11 +679,11 @@ const RiskIndicator = ({ riskLevel }) => {
     </th>
   );
   const formatCurrencyValue = (value) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'AED',
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "AED",
       minimumFractionDigits: 0,
-      maximumFractionDigits: 0
+      maximumFractionDigits: 0,
     }).format(value);
   };
   return (
@@ -688,40 +704,40 @@ const RiskIndicator = ({ riskLevel }) => {
         </div>
       </div>
 
-{/* Summary Statistics Cards */}
-<div className="mb-6">
-  <h2 className="text-lg font-semibold text-gray-700 mb-3">
-    Summary Statistics
-  </h2>
-  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-    {/* Combined Risk Distribution Cards */}
-    <SummaryCard
-      title="All High Risk Accounts"
-      value={summaryStats.highRiskCount}
-      icon={<AlertCircle className="h-5 w-5 text-red-600" />}
-      color="red"
-      isSelected={selectedCard === "high"}
-      onClick={() => handleCardSelect("high")}
-    />
-    <SummaryCard
-      title="All Moderate Risk Accounts"
-      value={summaryStats.moderateRiskCount}
-      icon={<AlertTriangle className="h-5 w-5 text-amber-500" />}
-      color="amber"
-      isSelected={selectedCard === "moderate"}
-      onClick={() => handleCardSelect("moderate")}
-    />
-    <SummaryCard
-      title="All Safe Accounts"
-      value={summaryStats.safeRiskCount}
-      icon={<CheckCircle className="h-5 w-5 text-green-600" />}
-      color="green"
-      isSelected={selectedCard === "safe"}
-      onClick={() => handleCardSelect("safe")}
-    />
-    
-    {/* LP Risk Distribution Cards */}
-    {/* <SummaryCard
+      {/* Summary Statistics Cards */}
+      <div className="mb-6">
+        <h2 className="text-lg font-semibold text-gray-700 mb-3">
+          Summary Statistics
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {/* Combined Risk Distribution Cards */}
+          <SummaryCard
+            title="All High Risk Accounts"
+            value={summaryStats.highRiskCount}
+            icon={<AlertCircle className="h-5 w-5 text-red-600" />}
+            color="red"
+            isSelected={selectedCard === "high"}
+            onClick={() => handleCardSelect("high")}
+          />
+          <SummaryCard
+            title="All Moderate Risk Accounts"
+            value={summaryStats.moderateRiskCount}
+            icon={<AlertTriangle className="h-5 w-5 text-amber-500" />}
+            color="amber"
+            isSelected={selectedCard === "moderate"}
+            onClick={() => handleCardSelect("moderate")}
+          />
+          <SummaryCard
+            title="All Safe Accounts"
+            value={summaryStats.safeRiskCount}
+            icon={<CheckCircle className="h-5 w-5 text-green-600" />}
+            color="green"
+            isSelected={selectedCard === "safe"}
+            onClick={() => handleCardSelect("safe")}
+          />
+
+          {/* LP Risk Distribution Cards */}
+          {/* <SummaryCard
       title="LP High Risk"
       value={summaryStats.lpHighRiskCount}
       icon={<Database className="h-5 w-5 text-red-600" />}
@@ -745,9 +761,9 @@ const RiskIndicator = ({ riskLevel }) => {
       isSelected={selectedCard === "lpSafe"}
       onClick={() => handleCardSelect("lpSafe")}
     /> */}
-    
-    {/* Debtor Risk Distribution Cards */}
-    {/* <SummaryCard
+
+          {/* Debtor Risk Distribution Cards */}
+          {/* <SummaryCard
       title="Debtor High Risk"
       value={summaryStats.debtorHighRiskCount}
       icon={<Users className="h-5 w-5 text-red-600" />}
@@ -771,70 +787,70 @@ const RiskIndicator = ({ riskLevel }) => {
       isSelected={selectedCard === "debtorSafe"}
       onClick={() => handleCardSelect("debtorSafe")}
     /> */}
-    
-    {/* Cash Flow Cards */}
-    <SummaryCard
-      title="Surplus Accounts"
-      value={summaryStats.surplusAccounts}
-      icon={<TrendingUp className="h-5 w-5 text-green-600" />}
-      color="green"
-      isSelected={selectedCard === "surplus"}
-      onClick={() => handleCardSelect("surplus")}
-    />
-    <SummaryCard
-      title="Deficit Accounts"
-      value={summaryStats.deficitAccounts}
-      icon={<TrendingDown className="h-5 w-5 text-red-600" />}
-      color="red"
-      isSelected={selectedCard === "deficit"}
-      onClick={() => handleCardSelect("deficit")}
-    />
-    
-    {/* Value Cards */}
-    <SummaryCard
-      title="Total Surplus"
-      value={formatCurrencyValue(summaryStats.surplusMargin)}
-      icon={<DollarSign className="h-5 w-5 text-green-600" />}
-      color="green"
-      isSelected={selectedCard === "totalSurplus"}
-      onClick={() => handleCardSelect("totalSurplus")}
-    />
-    <SummaryCard
-      title="Total Deficit"
-      value={formatCurrencyValue(summaryStats.deficitMargin)}
-      icon={<DollarSign className="h-5 w-5 text-red-600" />}
-      color="red"
-      isSelected={selectedCard === "totalDeficit"}
-      onClick={() => handleCardSelect("totalDeficit")}
-    />
-    
-    {/* Account Type Cards */}
-    <SummaryCard
-      title="Debtor Equity"
-      value={formatCurrencyValue(summaryStats.totalDebtorEquity)}
-      icon={<Users className="h-5 w-5 text-purple-600" />}
-      color="purple"
-      isSelected={selectedCard === "debtorEquity"}
-      onClick={() => handleCardSelect("debtorEquity")}
-    />
-    <SummaryCard
-      title="LP Equity"
-      value={formatCurrencyValue(summaryStats.totalLPEquity)}
-      icon={<Database className="h-5 w-5 text-blue-600" />}
-      color="blue"
-      isSelected={selectedCard === "lpEquity"}
-      onClick={() => handleCardSelect("lpEquity")}
-    />
-    <SummaryCard
-      title="Bank Balance"
-      value={formatCurrencyValue(summaryStats.totalBankBalance)}
-      icon={<DollarSign className="h-5 w-5 text-teal-600" />}
-      color="teal"
-      isSelected={selectedCard === "bankBalance"}
-      onClick={() => handleCardSelect("bankBalance")}
-    />
-    
-    {/* Average Cards
+
+          {/* Cash Flow Cards */}
+          <SummaryCard
+            title="Surplus Accounts"
+            value={summaryStats.surplusAccounts}
+            icon={<TrendingUp className="h-5 w-5 text-green-600" />}
+            color="green"
+            isSelected={selectedCard === "surplus"}
+            onClick={() => handleCardSelect("surplus")}
+          />
+          <SummaryCard
+            title="Deficit Accounts"
+            value={summaryStats.deficitAccounts}
+            icon={<TrendingDown className="h-5 w-5 text-red-600" />}
+            color="red"
+            isSelected={selectedCard === "deficit"}
+            onClick={() => handleCardSelect("deficit")}
+          />
+
+          {/* Value Cards */}
+          <SummaryCard
+            title="Total Surplus"
+            value={formatCurrencyValue(summaryStats.surplusMargin)}
+            icon={<DollarSign className="h-5 w-5 text-green-600" />}
+            color="green"
+            isSelected={selectedCard === "totalSurplus"}
+            onClick={() => handleCardSelect("totalSurplus")}
+          />
+          <SummaryCard
+            title="Total Deficit"
+            value={formatCurrencyValue(summaryStats.deficitMargin)}
+            icon={<DollarSign className="h-5 w-5 text-red-600" />}
+            color="red"
+            isSelected={selectedCard === "totalDeficit"}
+            onClick={() => handleCardSelect("totalDeficit")}
+          />
+
+          {/* Account Type Cards */}
+          <SummaryCard
+            title="Debtor Equity"
+            value={formatCurrencyValue(summaryStats.totalDebtorEquity)}
+            icon={<Users className="h-5 w-5 text-purple-600" />}
+            color="purple"
+            isSelected={selectedCard === "debtorEquity"}
+            onClick={() => handleCardSelect("debtorEquity")}
+          />
+          <SummaryCard
+            title="LP Equity"
+            value={formatCurrencyValue(summaryStats.totalLPEquity)}
+            icon={<Database className="h-5 w-5 text-blue-600" />}
+            color="blue"
+            isSelected={selectedCard === "lpEquity"}
+            onClick={() => handleCardSelect("lpEquity")}
+          />
+          <SummaryCard
+            title="Bank Balance"
+            value={formatCurrencyValue(summaryStats.totalBankBalance)}
+            icon={<DollarSign className="h-5 w-5 text-teal-600" />}
+            color="teal"
+            isSelected={selectedCard === "bankBalance"}
+            onClick={() => handleCardSelect("bankBalance")}
+          />
+
+          {/* Average Cards
     <SummaryCard
       title="Average Surplus"
       value={formatCurrencyValue(summaryStats.averageSurplus)}
@@ -851,18 +867,24 @@ const RiskIndicator = ({ riskLevel }) => {
       isSelected={selectedCard === "avgDeficit"}
       onClick={() => handleCardSelect("avgDeficit")}
     /> */}
-    
-    {/* Balance Metrics */}
-    <SummaryCard
-      title="Net Position"
-      value={formatCurrencyValue(summaryStats.surplusMargin - summaryStats.deficitMargin)}
-      icon={<Scale className="h-5 w-5 text-blue-600" />}
-      color={summaryStats.surplusMargin >= summaryStats.deficitMargin ? "green" : "red"}
-      isSelected={selectedCard === "netPosition"}
-      onClick={() => handleCardSelect("netPosition")}
-    />
-  </div>
-</div>
+
+          {/* Balance Metrics */}
+          <SummaryCard
+            title="Net Position"
+            value={formatCurrencyValue(
+              summaryStats.surplusMargin - summaryStats.deficitMargin
+            )}
+            icon={<Scale className="h-5 w-5 text-blue-600" />}
+            color={
+              summaryStats.surplusMargin >= summaryStats.deficitMargin
+                ? "green"
+                : "red"
+            }
+            isSelected={selectedCard === "netPosition"}
+            onClick={() => handleCardSelect("netPosition")}
+          />
+        </div>
+      </div>
 
       {/* Charts Section */}
       {showCharts && (

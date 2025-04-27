@@ -1,32 +1,32 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { motion } from "framer-motion";
-import goldBarImage from "../assets/GoldBar.jpg"; // Make sure this path is correct
+import goldBarImage from "../assets/GoldBar.jpg";
+import axios from '../api/axios';
 
 const LoginPage = () => {
-  const [email, setEmail] = useState("misadmin@aurify.ae");
-  const [password, setPassword] = useState("123");
+  const [userName, setUserName] = useState("");
+  const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [emailError, setEmailError] = useState("");
+  const [userNameError, setUserNameError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
-  // Demo login functionality
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     
     // Clear previous errors
-    setEmailError("");
+    setUserNameError("");
     setPasswordError("");
     
     // Simple validation
-    if (!email) {
-      setEmailError("Email is required");
+    if (!userName) {
+      setUserNameError("Username is required");
       setIsLoading(false);
       return;
     }
@@ -37,30 +37,61 @@ const LoginPage = () => {
       return;
     }
     
-    // Demo credentials check
-    if (email === "misadmin@aurify.ae" && password === "123") {
-      // Simulate API call delay
-      setTimeout(() => {
-        toast.success("Login Successful", {
+    try {
+      // Call the login API endpoint using axios
+      const response = await axios.post('/login', {
+        userName,
+        password,
+        rememberMe
+      });
+      
+      const responseData = response.data;
+      
+      if (responseData.success) {
+        // Login successful
+        toast.success(responseData.message || "Login Successful", {
           position: "top-right",
           autoClose: 2000,
         });
         
-        // Save to localStorage if remember me is checked
-        if (rememberMe) {
-          localStorage.setItem("token", "demo-token-12345");
-          localStorage.setItem("userName", email);
-          localStorage.setItem("rememberMe", "true");
-        }
+        // Get admin data and token from response
+        const { admin, token } = responseData.data;
+        
+        // Save auth data to localStorage
+        localStorage.setItem("token", token);
+        localStorage.setItem("adminId", admin._id);
         
         // Navigate to dashboard after toast
         setTimeout(() => {
           navigate("/dashboard");
         }, 2000);
-      }, 1000);
-    } else {
+      } else {
+        // Handle API success: false response
+        setPasswordError(responseData.message || "Login failed");
+      }
+      
+    } catch (error) {
+      // Handle errors
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        const errorData = error.response.data;
+        
+        if (!errorData.success) {
+          setPasswordError(errorData.message || errorData.error || "Invalid credentials");
+        } else {
+          setPasswordError("An unexpected error occurred");
+        }
+      } else if (error.request) {
+        // The request was made but no response was received
+        toast.error("No response from server. Please try again.");
+      } else {
+        // Something happened in setting up the request
+        toast.error("Connection error. Please try again.");
+      }
+      console.error("Login error:", error);
+    } finally {
       setIsLoading(false);
-      setPasswordError("Invalid email or password");
     }
   };
 
@@ -98,18 +129,18 @@ const LoginPage = () => {
           >
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email Address
+                Username 
               </label>
               <div className="relative">
                 <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  type="text"
+                  value={userName}
+                  onChange={(e) => setUserName(e.target.value)}
                   className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  placeholder="misadmin@aurify.ae"
+                  placeholder="Enter your username"
                 />
-                {emailError && (
-                  <p className="text-red-500 text-xs mt-1">{emailError}</p>
+                {userNameError && (
+                  <p className="text-red-500 text-xs mt-1">{userNameError}</p>
                 )}
               </div>
             </div>

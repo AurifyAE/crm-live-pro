@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Search, ChevronDown, Star, ChevronLeft, ChevronRight, Edit, Save, X, RefreshCw } from 'lucide-react';
 import useMarketData from '../components/marketData';
 import axiosInstance from '../api/axios';
+const adminId = localStorage.getItem("adminId");
 
 export default function AllUsers() {
   const { marketData } = useMarketData(["GOLD"]);
@@ -61,7 +62,7 @@ export default function AllUsers() {
   const fetchAllUsers = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await axiosInstance.get('/fetch-data');
+      const response = await axiosInstance.get(`/fetch-data/${adminId}`);
       if (response.data.status === 200) {
         // Process and transform the data
         console.log(response.data.data);
@@ -171,9 +172,9 @@ export default function AllUsers() {
       const newFavoriteStatus = !user.favorite;
       
       // Update in the backend
-      const response = await axiosInstance.put('/update-favorite', {
+      const response = await axiosInstance.put(`/update-favorite/${adminId}`, {
         accode: id,
-        is_favorite: newFavoriteStatus
+        isFavorite: newFavoriteStatus
       });
       
       if (response.data.status === 200 || response.data.status === 201) {
@@ -207,7 +208,7 @@ export default function AllUsers() {
     
     try {
       // Update in the backend
-      const response = await axiosInstance.put('/update-margin', {
+      const response = await axiosInstance.put(`/update-margin/${adminId}`, {
         accode: id,
         margin: newMargin
       });
@@ -252,7 +253,7 @@ export default function AllUsers() {
   const saveAccountType = useCallback(async (id) => {
     try {
       // Update in the backend
-      const response = await axiosInstance.put('/update-accountType', {
+      const response = await axiosInstance.put(`/update-accountType/${adminId}`, {
         accode: id,
         accountType: newAccountType.toUpperCase()
       });
@@ -285,26 +286,15 @@ export default function AllUsers() {
   // Loading state
   if (loading && allUsers.length === 0) {
     return (
-      <div className="p-6 max-w-full bg-gray-50 rounded-lg shadow flex justify-center items-center h-64">
-        <p className="text-lg text-gray-600">Loading data...</p>
+      <div className="fixed inset-0 flex justify-center items-center bg-white">
+        <div className="flex flex-col items-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600"></div>
+          <p className="mt-4 text-gray-600">Loading accounts...</p>
+        </div>
       </div>
     );
   }
 
-  // Error state
-  if (error && allUsers.length === 0) {
-    return (
-      <div className="p-6 max-w-full bg-gray-50 rounded-lg shadow flex flex-col justify-center items-center h-64">
-        <p className="text-lg text-red-600 mb-4">{error}</p>
-        <button 
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-          onClick={fetchAllUsers}
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
 
   // Table header component for reusability
   const TableHeader = ({ label, sortKey }) => (
@@ -325,7 +315,7 @@ export default function AllUsers() {
   );
 
   return (
-    <div className="p-6 max-w-full bg-gray-50 rounded-lg shadow">
+    <div className="p-6 w-full bg-gray-50 rounded-lg shadow">
       <h1 className="text-3xl font-bold text-gray-800 mb-6">User Management</h1>
       
       {/* Live Gold Rate */}

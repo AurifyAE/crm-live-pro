@@ -1,14 +1,13 @@
 import React from 'react'
 import Sidebar from '../components/sideBar';
-import UserManagement   from '../components/userManage';
-export default function userManagePage() {
+import Trading from '../components/Trading';
+export default function debtorPage() {
     return (
         <>
         <div className='flex'>
         <Sidebar/>
-        <UserManagement/>
+        <Trading/>
         </div>
-        
         </>
       );
 }

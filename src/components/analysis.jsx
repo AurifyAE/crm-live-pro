@@ -50,6 +50,7 @@ import {
 } from "recharts";
 import useMarketData from "../components/marketData";
 import axiosInstance from "../api/axios";
+const adminId = localStorage.getItem("adminId");
 
 export default function HypotheticalAnalysis() {
   // Current market data
@@ -485,7 +486,7 @@ export default function HypotheticalAnalysis() {
   const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await axiosInstance.get("/fetch-data");
+      const response = await axiosInstance.get(`/fetch-data/${adminId}`);
       if (response.data.status === 200) {
         setOriginalUsers(response.data.data);
       } else {
@@ -861,26 +862,11 @@ export default function HypotheticalAnalysis() {
   // Loading state
   if (loading && users.length === 0) {
     return (
-      <div className="p-6 max-w-full bg-gray-50 rounded-lg shadow flex justify-center items-center h-64">
-        <RefreshCw className="h-6 w-6 text-blue-500 animate-spin mr-3" />
-        <p className="text-lg text-gray-600">Loading analysis data...</p>
-      </div>
-    );
-  }
-
-  // Error state
-  if (error && users.length === 0) {
-    return (
-      <div className="p-6 max-w-full bg-gray-50 rounded-lg shadow flex flex-col justify-center items-center h-64">
-        <AlertCircle className="h-10 w-10 text-red-500 mb-3" />
-        <p className="text-lg text-red-600 mb-4">{error}</p>
-        <button
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center"
-          onClick={fetchUsers}
-        >
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Retry
-        </button>
+      <div className="fixed inset-0 flex justify-center items-center bg-white">
+        <div className="flex flex-col items-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600"></div>
+          <p className="mt-4 text-gray-600">Loading accounts...</p>
+        </div>
       </div>
     );
   }
