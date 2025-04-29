@@ -19,6 +19,10 @@ const ProfileManagement = () => {
   const [saveLoading, setSaveLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  // Pagination states
+  const [currentPageOrders, setCurrentPageOrders] = useState(1);
+  const [currentPageTransactions, setCurrentPageTransactions] = useState(1);
+  const itemsPerPage = 10; // Number of items per page
 
   useEffect(() => {
     if (userId && adminId) {
@@ -29,8 +33,10 @@ const ProfileManagement = () => {
   useEffect(() => {
     if (activeTab === "orders") {
       fetchOrderStatements();
+      setCurrentPageOrders(1); // Reset to first page when tab changes
     } else if (activeTab === "transactions") {
       fetchTransactionStatements();
+      setCurrentPageTransactions(1); // Reset to first page when tab changes
     }
   }, [activeTab]);
 
@@ -112,79 +118,36 @@ const ProfileManagement = () => {
   const fetchOrderStatements = async () => {
     try {
       setLoading(true);
-      // Replace with actual API call when endpoint is ready
-      // const response = await axiosInstance.get(`/user-orders/${adminId}/${userId}`);
+      setError(null); // Clear any previous errors
 
-      // Mock data for demonstration
-      const mockOrderData = [
-        {
-          id: "ORD-1001",
-          symbol: "GOLD",
-          type: "BUY",
-          size: 0.1,
-          openPrice: 3270.65,
-          closePrice: 3276.8,
-          profit: "+$6.15",
-          openTime: "2025-04-23T10:15:30Z",
-          closeTime: "2025-04-23T14:22:45Z",
-          status: "CLOSED",
-        },
-        {
-          id: "ORD-1002",
-          symbol: "GOLD",
-          type: "SELL",
-          size: 0.25,
-          openPrice: 3290.1,
-          closePrice: 3276.8,
-          profit: "+$33.25",
-          openTime: "2025-04-23T09:45:12Z",
-          closeTime: "2025-04-23T16:30:22Z",
-          status: "CLOSED",
-        },
-        {
-          id: "ORD-1003",
-          symbol: "GOLD",
-          type: "BUY",
-          size: 0.05,
-          openPrice: 3260.4,
-          closePrice: 3276.8,
-          profit: "+$8.20",
-          openTime: "2025-04-22T14:22:18Z",
-          closeTime: "2025-04-22T17:45:36Z",
-          status: "CLOSED",
-        },
-        {
-          id: "ORD-1004",
-          symbol: "GOLD",
-          type: "SELL",
-          size: 0.15,
-          openPrice: 3271.5,
-          closePrice: 3276.8,
-          profit: "-$7.95",
-          openTime: "2025-04-22T16:30:05Z",
-          closeTime: "2025-04-22T18:12:40Z",
-          status: "CLOSED",
-        },
-        {
-          id: "ORD-1005",
-          symbol: "GOLD",
-          type: "BUY",
-          size: 0.2,
-          openPrice: 3280.6,
-          closePrice: null,
-          profit: "-$7.60",
-          openTime: "2025-04-23T08:10:42Z",
-          closeTime: null,
-          status: "OPEN",
-        },
-      ];
+      const response = await axiosInstance.get(
+        `/user-orders/${adminId}/${userId}`
+      );
 
-      setStatements(mockOrderData);
+      if (response.data.status === 200) {
+        setStatements(response.data.data);
+
+        // If data is empty, you might want to show a message
+        if (response.data.data.length === 0) {
+          setError("No order statements found for this user.");
+        }
+      } else {
+        // Handle unsuccessful response
+        setError(
+          response.data.message || "Failed to retrieve order statements."
+        );
+      }
+
       setLoading(false);
     } catch (error) {
       console.error("Error fetching order statements:", error);
       setLoading(false);
-      setError("Failed to load order statements. Please try again later.");
+
+      // Provide more specific error messages if available
+      const errorMessage =
+        error.response?.data?.message ||
+        "Failed to load order statements. Please try again later.";
+      setError(errorMessage);
     }
   };
 
@@ -192,69 +155,36 @@ const ProfileManagement = () => {
   const fetchTransactionStatements = async () => {
     try {
       setLoading(true);
-      // Replace with actual API call when endpoint is ready
-      // const response = await axiosInstance.get(`/user-transactions/${adminId}/${userId}`);
+      setError(null); // Clear any previous errors
 
-      // Mock data for demonstration
-      const mockTransactionData = [
-        {
-          id: "TRX-2001",
-          type: "DEPOSIT",
-          asset: "CASH",
-          amount: "$500.00",
-          status: "COMPLETED",
-          timestamp: "2025-04-21T08:30:15Z",
-          reference: "REF-D10023",
-          balance: "$3,500.00",
-        },
-        {
-          id: "TRX-2002",
-          type: "WITHDRAWAL",
-          asset: "CASH",
-          amount: "$200.00",
-          status: "COMPLETED",
-          timestamp: "2025-04-22T14:15:30Z",
-          reference: "REF-W10045",
-          balance: "$3,300.00",
-        },
-        {
-          id: "TRX-2003",
-          type: "DEPOSIT",
-          asset: "GOLD",
-          amount: "0.05 oz",
-          status: "COMPLETED",
-          timestamp: "2025-04-23T09:20:10Z",
-          reference: "REF-D10067",
-          balance: "0.15 oz",
-        },
-        {
-          id: "TRX-2004",
-          type: "WITHDRAWAL",
-          asset: "GOLD",
-          amount: "0.02 oz",
-          status: "PENDING",
-          timestamp: "2025-04-24T10:45:22Z",
-          reference: "REF-W10089",
-          balance: "0.13 oz",
-        },
-        {
-          id: "TRX-2005",
-          type: "DEPOSIT",
-          asset: "CASH",
-          amount: "$750.00",
-          status: "COMPLETED",
-          timestamp: "2025-04-24T16:30:45Z",
-          reference: "REF-D10112",
-          balance: "$4,050.00",
-        },
-      ];
+      const response = await axiosInstance.get(
+        `/user-transactions/${adminId}/${userId}`
+      );
 
-      setTransactions(mockTransactionData);
+      if (response.data.status === 200) {
+        setTransactions(response.data.data);
+
+        // If data is empty, you might want to show a message
+        if (response.data.data.length === 0) {
+          setError("No transaction history found for this user.");
+        }
+      } else {
+        // Handle unsuccessful response
+        setError(
+          response.data.message || "Failed to retrieve transaction history."
+        );
+      }
+
       setLoading(false);
     } catch (error) {
       console.error("Error fetching transaction statements:", error);
       setLoading(false);
-      setError("Failed to load transaction history. Please try again later.");
+
+      // Provide more specific error messages if available
+      const errorMessage =
+        error.response?.data?.message ||
+        "Failed to load transaction history. Please try again later.";
+      setError(errorMessage);
     }
   };
 
@@ -369,11 +299,80 @@ const ProfileManagement = () => {
     return statusMap[status] || status;
   };
 
+  // Pagination logic for orders
+  const indexOfLastOrder = currentPageOrders * itemsPerPage;
+  const indexOfFirstOrder = indexOfLastOrder - itemsPerPage;
+  const currentOrders = statements.slice(indexOfFirstOrder, indexOfLastOrder);
+  const totalPagesOrders = Math.ceil(statements.length / itemsPerPage);
+
+  const paginateOrders = (pageNumber) => {
+    if (pageNumber >= 1 && pageNumber <= totalPagesOrders) {
+      setCurrentPageOrders(pageNumber);
+    }
+  };
+
+  // Pagination logic for transactions
+  const indexOfLastTransaction = currentPageTransactions * itemsPerPage;
+  const indexOfFirstTransaction = indexOfLastTransaction - itemsPerPage;
+  const currentTransactions = transactions.slice(
+    indexOfFirstTransaction,
+    indexOfLastTransaction
+  );
+  const totalPagesTransactions = Math.ceil(transactions.length / itemsPerPage);
+
+  const paginateTransactions = (pageNumber) => {
+    if (pageNumber >= 1 && pageNumber <= totalPagesTransactions) {
+      setCurrentPageTransactions(pageNumber);
+    }
+  };
+
+  // Pagination component
+  const Pagination = ({ currentPage, totalPages, paginate }) => {
+    return (
+      <div className="flex justify-center mt-6">
+        <nav className="inline-flex rounded-md shadow">
+          <button
+            onClick={() => paginate(currentPage - 1)}
+            disabled={currentPage === 1}
+            className={`px-3 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 ${
+              currentPage === 1 ? "cursor-not-allowed" : ""
+            }`}
+          >
+            Previous
+          </button>
+          {Array.from({ length: totalPages }, (_, index) => (
+            <button
+              key={index + 1}
+              onClick={() => paginate(index + 1)}
+              className={`px-3 py-2 border border-gray-300 bg-white text-sm font-medium ${
+                currentPage === index + 1
+                  ? "text-blue-600 bg-blue-50"
+                  : "text-gray-500 hover:bg-gray-50"
+              }`}
+            >
+              {index + 1}
+            </button>
+          ))}
+          <button
+            onClick={() => paginate(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className={`px-3 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 ${
+              currentPage === totalPages ? "cursor-not-allowed" : ""
+            }`}
+          >
+            Next
+          </button>
+        </nav>
+      </div>
+    );
+  };
+
   if (loading && !userData) {
     return (
-      <div className="flex justify-center items-center h-96 bg-gradient-to-r from-blue-700 to-blue-500">
-        <div className="bg-white p-8 rounded-xl shadow-xl">
-          <Spinner size="lg" />
+      <div className="fixed inset-0 flex justify-center items-center bg-white">
+        <div className="flex flex-col items-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600"></div>
+          <p className="mt-4 text-gray-600">Loading accounts...</p>
         </div>
       </div>
     );
@@ -603,12 +602,10 @@ const ProfileManagement = () => {
                 <div className="text-right">
                   <h4 className="font-medium text-gray-700">Account Balance</h4>
                   <p className="text-green-600 font-bold text-xl flex items-center justify-end mt-1">
-                   
                     AED {userData.accountBalance?.cash.toFixed(2)}
                   </p>
                   <p className="text-yellow-600 font-medium flex items-center justify-end">
-                   
-                    {userData.accountBalance?.gold}  Gold
+                    {userData.accountBalance?.gold} Gold
                   </p>
                 </div>
               </div>
@@ -758,7 +755,7 @@ const ProfileManagement = () => {
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          User Spread 
+                          User Spread
                         </label>
                         <input
                           type="number"
@@ -850,7 +847,7 @@ const ProfileManagement = () => {
                           Account Number
                         </dt>
                         <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                       ACC {userData.accountNumber || "Not assigned"}
+                          ACC {userData.accountNumber || "Not assigned"}
                         </dd>
                       </div>
                       <div className="sm:grid sm:grid-cols-3 sm:gap-4">
@@ -966,98 +963,119 @@ const ProfileManagement = () => {
                   <Spinner size="lg" />
                 </div>
               ) : statements.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200 bg-white rounded-lg shadow-md">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th
-                          scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                        >
-                          Order ID
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                        >
-                          Type
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                        >
-                          Size
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                        >
-                          Open Price
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                        >
-                          Close Price
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                        >
-                          Profit/Loss
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                        >
-                          Status
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                        >
-                          Date
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {statements.map((order) => (
-                        <tr key={order.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {order.id}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm">
-                            <Badge
-                              color={order.type === "BUY" ? "green" : "red"}
-                            >
-                              {order.type}
-                            </Badge>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {order.size} oz
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            ${order.openPrice}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {order.closePrice ? `$${order.closePrice}` : "-"}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm">
-                            {formatProfit(order.profit)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm">
-                            <Badge color={getStatusBadgeColor(order.status)}>
-                              {order.status}
-                            </Badge>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {formatDate(order.openTime)}
-                          </td>
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200 bg-white rounded-lg shadow-md">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th
+                            scope="col"
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          >
+                            Order ID
+                          </th>
+                          <th
+                            scope="col"
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          >
+                            Type
+                          </th>
+                          <th
+                            scope="col"
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          >
+                            Size
+                          </th>
+                          <th
+                            scope="col"
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          >
+                            Open Price
+                          </th>
+                          <th
+                            scope="col"
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          >
+                            Close Price
+                          </th>
+                          <th
+                            scope="col"
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          >
+                            Profit/Loss
+                          </th>
+                          <th
+                            scope="col"
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          >
+                            Status
+                          </th>
+                          <th
+                            scope="col"
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          >
+                            Date
+                          </th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {currentOrders.map((order) => (
+                          <tr key={order.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                              {order.orderNo}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              <Badge
+                                color={order.type === "BUY" ? "green" : "red"}
+                              >
+                                {order.type}
+                              </Badge>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {order.size} oz
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              $ {order.openingPrice + order.user.userSpread}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {order.closingPrice
+                                ? `$${order.closingPrice + order.user.userSpread}`
+                                : "-"}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              <span
+                                className={`font-medium ${
+                                  order.profit > 0
+                                    ? "text-green-600"
+                                    : order.profit < 0
+                                    ? "text-red-600"
+                                    : "text-gray-500"
+                                }`}
+                              >
+                                {order.profit ? order.profit.toFixed(2) : "-"}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              <Badge
+                                color={getStatusBadgeColor(order.orderStatus)}
+                              >
+                                {order.orderStatus}
+                              </Badge>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {formatDate(order.time)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <Pagination
+                    currentPage={currentPageOrders}
+                    totalPages={totalPagesOrders}
+                    paginate={paginateOrders}
+                  />
+                </>
               ) : (
                 <div className="text-center p-10 bg-white rounded-lg shadow-md">
                   <p className="text-gray-500">No order statements found.</p>
@@ -1092,95 +1110,103 @@ const ProfileManagement = () => {
                   <Spinner size="lg" />
                 </div>
               ) : transactions.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200 bg-white rounded-lg shadow-md">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th
-                          scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                        >
-                          Transaction ID
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                        >
-                          Type
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                        >
-                          Asset
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                        >
-                          Amount
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                        >
-                          Status
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                        >
-                          Date
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                        >
-                          Balance After
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {transactions.map((transaction) => (
-                        <tr key={transaction.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {transaction.id}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm">
-                            <Badge
-                              color={
-                                transaction.type === "DEPOSIT"
-                                  ? "green"
-                                  : "blue"
-                              }
-                            >
-                              {transaction.type}
-                            </Badge>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {transaction.asset}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
-                            {transaction.amount}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm">
-                            <Badge
-                              color={getStatusBadgeColor(transaction.status)}
-                            >
-                              {transaction.status}
-                            </Badge>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {formatDate(transaction.timestamp)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {transaction.balance}
-                          </td>
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200 bg-white rounded-lg shadow-md">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th
+                            scope="col"
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          >
+                            Transaction ID
+                          </th>
+                          <th
+                            scope="col"
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          >
+                            Type
+                          </th>
+                          <th
+                            scope="col"
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          >
+                            Asset
+                          </th>
+                          <th
+                            scope="col"
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          >
+                            Amount
+                          </th>
+                          <th
+                            scope="col"
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          >
+                            Status
+                          </th>
+                          <th
+                            scope="col"
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          >
+                            Date
+
+                          </th>
+                          <th
+                            scope="col"
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          >
+                            Balance After
+                          </th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {currentTransactions.map((transaction) => (
+                          <tr key={transaction.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                              {transaction.transactionId}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              <Badge
+                                color={
+                                  transaction.type === "DEPOSIT"
+                                    ? "green"
+                                    : "blue"
+                                }
+                              >
+                                {transaction.type}
+                              </Badge>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {transaction.asset}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                              {transaction.amount}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              <Badge
+                                color={getStatusBadgeColor(transaction.status)}
+                              >
+                                {transaction.status}
+                              </Badge>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {formatDate(transaction.date)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {transaction.newBalance}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <Pagination
+                    currentPage={currentPageTransactions}
+                    totalPages={totalPagesTransactions}
+                    paginate={paginateTransactions}
+                  />
+                </>
               ) : (
                 <div className="text-center p-10 bg-white rounded-lg shadow-md">
                   <p className="text-gray-500">No transaction history found.</p>

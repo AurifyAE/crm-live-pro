@@ -36,12 +36,8 @@ export default function Trading() {
     priceUpdateTimestamp: null,
   });
 
-  // State for order dialog
   const [isOrderDialogOpen, setIsOrderDialogOpen] = useState(false);
-
-  // State for orders and table headers
   const [orders, setOrders] = useState([]);
-  // New state to track whether to show the total profit row
   const [showTotalProfit, setShowTotalProfit] = useState(false);
   
   console.log(orders)
@@ -59,40 +55,27 @@ export default function Trading() {
     { key: "actions", label: "Actions", align: "center" },
   ]);
 
-  // Fetch orders when component mounts
   useEffect(() => {
     fetchOrders();
   }, []);
 
-  // Function to toggle total profit display
   const toggleTotalProfit = () => {
     setShowTotalProfit(prevState => !prevState);
   };
 
-  // Function to calculate total profit
   const calculateTotalProfit = () => {
     if (orders.length === 0) return "0.00";
-    
-    let total = 0;
-    orders.forEach(order => {
-      // Extract the numerical value from profit strings
-      const profitString = order.profit.toString();
-      const profitValue = parseFloat(profitString.replace(/[^0-9.-]+/g, ""));
+        const total = orders.reduce((sum, order) => {
+      const profitValue = order.rawProfit !== undefined 
+        ? order.rawProfit 
+        : parseFloat(order.profit.replace(/[^0-9.-]+/g, "")) * (order.profit.includes("-") ? -1 : 1);
       
-      if (!isNaN(profitValue)) {
-        // If the profit string contains a minus sign, it's negative
-        if (profitString.includes("-")) {
-          total -= profitValue;
-        } else {
-          total += profitValue;
-        }
-      }
-    });
+      return sum + (isNaN(profitValue) ? 0 : profitValue);
+    }, 0);
     
     return total.toFixed(2);
   };
 
-  // Function to fetch orders with status "PROCESSING"
   const fetchOrders = async () => {
     try {
       const response = await axios.get(`/order/${adminId}`);
@@ -106,7 +89,8 @@ export default function Trading() {
         const processedOrders = processingOrders.map(order => {
           return {
             ...order,
-            profit:order.profit,
+            profit: order.profit,
+            rawProfit: parseFloat(order.profit || 0),
             accountHead: order.user?.ACCOUNT_HEAD || "N/A",
             userName: `${order.user?.firstName || ""} ${order.user?.lastName || ""}`.trim() || "N/A",
             // We'll update the currentPrice and profit in the useEffect for goldData
@@ -203,7 +187,6 @@ export default function Trading() {
     }
   }, [goldData.priceUpdateTimestamp]);
 
-  // Update orders with current prices based on order type (bid for BUY, ask for SELL)
   useEffect(() => {
     if (goldData.bid !== null && goldData.ask !== null) {
       setOrders((prevOrders) =>
@@ -211,25 +194,22 @@ export default function Trading() {
           // Use the appropriate price based on order type
           const currentPrice = order.type === "BUY" ? goldData.bid : goldData.ask;
           
-          // let profit;
-          // if (order.type === "BUY") {
-          //   profit = (
-          //     (currentPrice - order.openingPrice) *
-          //     order.volume *
-          //     100
-          //   ).toFixed(2);
-          // } else {
-          //   profit = (
-          //     (order.openingPrice - currentPrice) *
-          //     order.volume *
-          //     100
-          //   ).toFixed(2);
-          // }
-
+          // Calculate price difference based on order type
+          const priceDifference = order.type === "BUY" 
+            ? currentPrice - parseFloat(order.openingPrice) 
+            : parseFloat(order.openingPrice) - currentPrice;
+          
+          // Store raw difference without multiplying by volume
+          const rawProfit = priceDifference;
+          
+          // Format for display
+          const formattedProfit = (rawProfit >= 0 ? "+" : "") + "$" + Math.abs(rawProfit).toFixed(2);
+          
           return {
             ...order,
             currentPrice: currentPrice.toFixed(2),
-            // profit: (parseFloat(profit) >= 0 ? "+" : "") + "$" + Math.abs(parseFloat(profit)).toFixed(2),
+            rawProfit: rawProfit, // Store raw value for calculations
+            profit: formattedProfit
           };
         })
       );
@@ -302,6 +282,7 @@ export default function Trading() {
         orderStatus: "CLOSED",
         closingDate: new Date().toISOString(),
         closingPrice: closingPrice,
+        profit: orderToClose ? orderToClose.rawProfit : 0, // Send the raw profit value
       });
       
       if (response.data.success) {
@@ -310,17 +291,6 @@ export default function Trading() {
       }
     } catch (error) {
       console.error("Error closing order:", error);
-    }
-  };
-
-  // Handler for modifying an existing order
-  const handleModifyOrder = (orderId) => {
-    // Find the order to modify
-    const orderToModify = orders.find(order => order._id === orderId);
-    if (orderToModify) {
-      setIsOrderDialogOpen(true);
-      // You would need to add state to track if this is a modification
-      // and pass the order details to the OrderDialog component
     }
   };
 
@@ -356,6 +326,19 @@ export default function Trading() {
       return <ArrowDown size={16} className="text-red-500" />;
     }
     return null;
+  };
+
+  // Helper function to get profit/loss color
+  const getProfitColor = (profitValue) => {
+    if (profitValue === null || profitValue === undefined) return "text-gray-600";
+    
+    // Check if profitValue is a string or number
+    if (typeof profitValue === 'string') {
+      return profitValue.includes("+") ? "text-green-600" : "text-red-600";
+    } else {
+      // If it's a number, check if it's positive or negative
+      return profitValue >= 0 ? "text-green-600" : "text-red-600";
+    }
   };
 
   return (
@@ -595,10 +578,10 @@ export default function Trading() {
                         {order.volume}
                       </td>
                       <td className="py-3 px-3 whitespace-nowrap text-right">
-                        {parseFloat(order.openingPrice).toFixed(2)}
+                      ${parseFloat(order.openingPrice).toFixed(2)}
                       </td>
                       <td className="py-3 px-3 whitespace-nowrap text-right font-medium">
-                        {order.currentPrice}
+                      ${order.currentPrice}
                       </td>
                      
                       <td className="py-3 px-3 whitespace-nowrap text-left">
@@ -612,7 +595,7 @@ export default function Trading() {
                           {formatDate(order.openingDate)}
                         </div>
                       </td>
-                      <td className={`py-3 px-3 whitespace-nowrap text-right font-medium`}>
+                      <td className={`py-3 px-3 whitespace-nowrap text-right font-medium ${getProfitColor(order.profit)}`}>
                         {order.profit}
                       </td>
                       <td className="py-3 px-3 whitespace-nowrap text-center">
@@ -635,8 +618,8 @@ export default function Trading() {
                       <td className={`py-3 px-3 whitespace-nowrap text-right font-bold ${
                         parseFloat(calculateTotalProfit()) >= 0 ? "text-green-600" : "text-red-600"
                       }`}>
-                        {parseFloat(calculateTotalProfit()) >= 0 ? "+" : "-"}
-                        ${Math.abs(parseFloat(calculateTotalProfit()))}
+                        {parseFloat(calculateTotalProfit()) >= 0 ? "+" : ""}
+                        ${Math.abs(parseFloat(calculateTotalProfit())).toFixed(2)}
                       </td>
                       <td></td>
                     </tr>

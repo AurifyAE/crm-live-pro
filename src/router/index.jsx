@@ -4,7 +4,7 @@ import HomePage from "../pages/homePage";
 import DebtorPage from "../pages/debtorPage";
 import AllUsersPage from "../pages/allUsersPage";
 import LpPage from "../pages/LpPage";
-import BankPage from "../pages/bankPage";
+import FundManagementPage from "../pages/bankPage";
 import CashFlowPage from "../pages/cashFlowPage";
 import AnalysisPage from "../pages/analysisPage";
 import NotFound from "../components/notFound"; 
@@ -13,6 +13,7 @@ import UserManagePage from "../pages/userManagePage";
 import ProfilePage from '../pages/ProfilePage'
 import Trading from '../pages/TradingPage'
 import Statement from '../pages/statementPage'
+import LpStatement from '../pages/lpStatementsPage'
 export default function UserRouter() {
   return (
     <Routes>
@@ -21,12 +22,13 @@ export default function UserRouter() {
       <Route path="/debtor" element={<DebtorPage />} />
       <Route path="/user-data" element={<AllUsersPage />} />
       <Route path="/liquidity-provider" element={<LpPage />} />
-      <Route path="/bank" element={<BankPage />} />
+      <Route path="/fund-management" element={<FundManagementPage />} />
       <Route path="/cash-flow" element={<CashFlowPage />} />
       <Route path="/analysis" element={<AnalysisPage />} />
       <Route path="/user-management" element={<UserManagePage />} />
       <Route path="/trading" element={<Trading />} />
       <Route path="/statements" element={<Statement />} />
+      <Route path="/lp-statement" element={<LpStatement />} />
       <Route path="/profile/:userId" element={<ProfilePage />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
