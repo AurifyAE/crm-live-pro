@@ -848,7 +848,7 @@ export default function LpStatements() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {currentItems.map((statement, index) => (
+                  {currentItems?.map((statement, index) => (
                     <tr key={index} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                         {statement.orderNo || statement.positionId || "--"}
@@ -871,10 +871,10 @@ export default function LpStatements() {
                         {statement.volume}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {statement.entryPrice.toFixed(2)}
+                        {statement.entryPrice?.toFixed(2)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {statement.closingPrice.toFixed(2)}
+                        {statement.closingPrice?.toFixed(2)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {formatDate(statement.openDate)}
