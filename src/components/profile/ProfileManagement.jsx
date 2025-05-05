@@ -5,6 +5,34 @@ import { Tabs, Tab } from "./Tabs";
 import { Spinner } from "./Spinner";
 import { Badge } from "./Badge";
 import { formatDate } from "../../utils/formatters";
+import {
+  ArrowDownUp,
+  RefreshCw,
+  Search,
+  Filter,
+  FileText,
+  Download,
+  Clock,
+  DollarSign,
+  Calendar,
+  CreditCard,
+  AlertCircle,
+  BarChart2,
+  Plus,
+  XCircle,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Book,
+  Settings,
+  AlertTriangle,
+  ChevronDown,
+  Layers,
+  Info,
+  Package,
+  X,
+} from "lucide-react";
 
 const ProfileManagement = () => {
   const { userId } = useParams();
@@ -19,10 +47,21 @@ const ProfileManagement = () => {
   const [saveLoading, setSaveLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  // Pagination states
+
+  // Pagination states for different tabs
   const [currentPageOrders, setCurrentPageOrders] = useState(1);
   const [currentPageTransactions, setCurrentPageTransactions] = useState(1);
-  const itemsPerPage = 10; // Number of items per page
+  const [currentLedgerPage, setCurrentLedgerPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // Ledger state
+  const [ledgerEntries, setLedgerEntries] = useState([]);
+  const [totalLedgerItems, setTotalLedgerItems] = useState(0);
+  const [totalLedgerPages, setTotalLedgerPages] = useState(0);
+  const [expandedRow, setExpandedRow] = useState(null);
+  const [sortField, setSortField] = useState("date");
+  const [sortDirection, setSortDirection] = useState("desc");
+  const [ledgerLoading, setLedgerLoading] = useState(false);
 
   useEffect(() => {
     if (userId && adminId) {
@@ -31,12 +70,16 @@ const ProfileManagement = () => {
   }, [userId, adminId]);
 
   useEffect(() => {
+    // Reset pagination when tab changes
     if (activeTab === "orders") {
       fetchOrderStatements();
-      setCurrentPageOrders(1); // Reset to first page when tab changes
+      setCurrentPageOrders(1);
     } else if (activeTab === "transactions") {
       fetchTransactionStatements();
-      setCurrentPageTransactions(1); // Reset to first page when tab changes
+      setCurrentPageTransactions(1);
+    } else if (activeTab === "ledger") {
+      fetchLedgerEntries();
+      setCurrentLedgerPage(1);
     }
   }, [activeTab]);
 
@@ -188,6 +231,60 @@ const ProfileManagement = () => {
     }
   };
 
+  // Fetch ledger entries
+  const fetchLedgerEntries = async () => {
+    try {
+      setLedgerLoading(true);
+      setError(null);
+
+      const params = {
+        adminId,
+        userId,
+        page: currentLedgerPage,
+        limit: itemsPerPage,
+        sortField,
+        sortDirection,
+      };
+
+      const response = await axiosInstance.get("/fetch-ledger", { params });
+
+      if (response.data.success && response.data.data) {
+        const filteredEntries = response.data.data?.filter(
+          (entry) => entry.entryType !== "LP_POSITION"
+        );
+        setLedgerEntries(filteredEntries);
+        setTotalLedgerItems(response.data.pagination.total || 0);
+        setTotalLedgerPages(response.data.pagination.pages || 1);
+      } else {
+        setError(response.data.message || "Failed to retrieve ledger entries.");
+      }
+
+      setLedgerLoading(false);
+    } catch (error) {
+      console.error("Error fetching ledger entries:", error);
+      setLedgerLoading(false);
+      setError(
+        error.response?.data?.message ||
+          "Failed to load ledger entries. Please try again later."
+      );
+    }
+  };
+
+  const handleSort = (field) => {
+    // If clicking the same field, toggle direction
+    if (field === sortField) {
+      const newDirection = sortDirection === "asc" ? "desc" : "asc";
+      setSortDirection(newDirection);
+    } else {
+      // New field, default to ascending
+      setSortField(field);
+      setSortDirection("asc");
+    }
+    // Refetch with new sort parameters
+    setCurrentLedgerPage(1);
+    fetchLedgerEntries();
+  };
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
 
@@ -264,6 +361,10 @@ const ProfileManagement = () => {
         return "blue";
       case "closed":
         return "gray";
+      case "credit":
+        return "green";
+      case "debit":
+        return "red";
       default:
         return "gray";
     }
@@ -326,47 +427,512 @@ const ProfileManagement = () => {
     }
   };
 
-  // Pagination component
-  const Pagination = ({ currentPage, totalPages, paginate }) => {
+  // Pagination for ledger (server-side pagination)
+  const paginateLedger = (pageNumber) => {
+    if (pageNumber >= 1 && pageNumber <= totalLedgerPages) {
+      setCurrentLedgerPage(pageNumber);
+      fetchLedgerEntries();
+    }
+  };
+
+  const ExpandableRow = ({ entry, index }) => {
+    const [expanded, setExpanded] = useState(false);
+
+    // Function to toggle expanded state
+    const toggleExpanded = () => {
+      setExpanded(!expanded);
+    };
+
+    // Get entry type badge style
+    const getEntryTypeBadgeStyle = (entryType) => {
+      switch (entryType) {
+        case "TRANSACTION":
+          return "bg-blue-100 text-blue-800";
+        case "ORDER":
+          return "bg-green-100 text-green-800";
+        case "LP_POSITION":
+          return "bg-purple-100 text-purple-800";
+        default:
+          return "bg-gray-100 text-gray-800";
+      }
+    };
+
+    // Get entry nature badge style
+    const getEntryNatureBadgeStyle = (entryNature) => {
+      switch (entryNature) {
+        case "CREDIT":
+          return "bg-green-100 text-green-800";
+        case "DEBIT":
+          return "bg-red-100 text-red-800";
+        default:
+          return "bg-gray-100 text-gray-800";
+      }
+    };
+
+    // Function to format amount based on asset type
+    const formatAmount = (amount, asset) => {
+      if (asset === "GOLD") {
+        return `${amount ? amount.toFixed(2) : "0.00"} Oz`;
+      } else {
+        return `AED ${amount ? amount.toFixed(2) : "0.00"}`;
+      }
+    };
+
+    // Check if this entry has GOLD as an asset (for transactions)
+    const isGoldAsset =
+      entry.entryType === "TRANSACTION" &&
+      entry.transactionDetails &&
+      entry.transactionDetails.asset === "GOLD";
+
     return (
-      <div className="flex justify-center mt-6">
-        <nav className="inline-flex rounded-md shadow">
+      <React.Fragment>
+        <tr className={`hover:bg-gray-50 ${expanded ? "bg-gray-50" : ""}`}>
+          <td className="px-3 py-4 text-center">
+            <button
+              onClick={toggleExpanded}
+              className="text-gray-500 hover:text-gray-700 focus:outline-none"
+            >
+              {expanded ? (
+                <ChevronDown size={18} />
+              ) : (
+                <ChevronRight size={18} />
+              )}
+            </button>
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+            {entry.entryId || "N/A"}
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            {entry.user?.ACCOUNT_HEAD || "N/A"}
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap">
+            <span
+              className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getEntryTypeBadgeStyle(
+                entry.entryType
+              )}`}
+            >
+              {entry.entryType}
+            </span>
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap">
+            <span
+              className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getEntryNatureBadgeStyle(
+                entry.entryNature
+              )}`}
+            >
+              {entry.entryNature}
+            </span>
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            {entry.referenceNumber || "N/A"}
+          </td>
+
+          <td className="px-6 py-4 whitespace-nowrap text-sm">
+            <div className="flex items-center">
+              <span
+                className={
+                  entry.entryNature === "CREDIT"
+                    ? "text-green-600"
+                    : "text-red-600"
+                }
+              >
+                {formatAmount(entry.amount, isGoldAsset ? "GOLD" : null)}
+              </span>
+            </div>
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            <div className="flex items-center">
+              <Clock size={14} className="mr-1" />
+              {entry.date ? formatDate(entry.date) : "N/A"}
+            </div>
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            <button
+              className="text-blue-600 hover:text-blue-900 flex items-center"
+              onClick={toggleExpanded} // Add click handler here
+            >
+              <Settings size={16} />
+              <span className="ml-1 text-xs">{expanded ? "Hide" : "View"}</span>
+            </button>
+          </td>
+        </tr>
+        {expanded && (
+          <tr>
+            <td
+              colSpan="10"
+              className="px-8 py-4 bg-gray-50 border-t border-b border-gray-200"
+            >
+              <div className="rounded-md bg-white p-4 shadow-sm border border-gray-200">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center">
+                    <h4 className="text-sm font-semibold text-gray-700">
+                      Details
+                    </h4>
+                    <div className="ml-2 px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600">
+                      {entry.description}
+                    </div>
+                  </div>
+                  <button
+                    onClick={toggleExpanded}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-3">
+                  <div className="text-sm">
+                    <div className="text-gray-500 text-xs">Entry ID</div>
+                    <div className="font-medium">{entry.entryId || "N/A"}</div>
+                  </div>
+                  <div className="text-sm">
+                    <div className="text-gray-500 text-xs">
+                      Reference Number
+                    </div>
+                    <div className="font-medium">
+                      {entry.referenceNumber || "N/A"}
+                    </div>
+                  </div>
+                  <div className="text-sm">
+                    <div className="text-gray-500 text-xs">Running Balance</div>
+                    <div className="font-medium">
+                      {formatAmount(
+                        entry.runningBalance,
+                        isGoldAsset ? "GOLD" : null
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Type-specific details */}
+                {entry.entryType === "TRANSACTION" &&
+                  entry.transactionDetails && (
+                    <div className="bg-blue-50 rounded-md p-3 mb-3">
+                      <div className="flex items-center mb-2">
+                        <DollarSign size={14} className="text-blue-600 mr-1" />
+                        <h5 className="text-sm font-semibold text-blue-700">
+                          Transaction Details
+                        </h5>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        <div className="text-sm">
+                          <div className="text-blue-600 text-xs">Type</div>
+                          <div className="font-medium">
+                            {entry.transactionDetails.type || "N/A"}
+                          </div>
+                        </div>
+                        <div className="text-sm">
+                          <div className="text-blue-600 text-xs">Asset</div>
+                          <div className="font-medium">
+                            {entry.transactionDetails.asset || "N/A"}
+                          </div>
+                        </div>
+                        <div className="text-sm">
+                          <div className="text-blue-600 text-xs">
+                            Previous Balance
+                          </div>
+                          <div className="font-medium">
+                            {formatAmount(
+                              entry.transactionDetails.previousBalance,
+                              entry.transactionDetails.asset
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                {entry.entryType === "ORDER" && entry.orderDetails && (
+                  <div className="bg-green-50 rounded-md p-3 mb-3">
+                    <div className="flex items-center mb-2">
+                      <Package size={14} className="text-green-600 mr-1" />
+                      <h5 className="text-sm font-semibold text-green-700">
+                        Order Details
+                      </h5>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="text-sm">
+                        <div className="text-green-600 text-xs">Type</div>
+                        <div className="font-medium">
+                          {entry.orderDetails.type || "N/A"}
+                        </div>
+                      </div>
+                      <div className="text-sm">
+                        <div className="text-green-600 text-xs">Symbol</div>
+                        <div className="font-medium">
+                          {entry.orderDetails.symbol || "N/A"}
+                        </div>
+                      </div>
+                      <div className="text-sm">
+                        <div className="text-green-600 text-xs">Volume</div>
+                        <div className="font-medium">
+                          {entry.orderDetails.volume || "N/A"}
+                        </div>
+                      </div>
+                      <div className="text-sm">
+                        <div className="text-green-600 text-xs">
+                          Entry Price
+                        </div>
+                        <div className="font-medium">
+                          ${entry.orderDetails.entryPrice?.toFixed(2) || "N/A"}
+                        </div>
+                      </div>
+                      <div className="text-sm">
+                        <div className="text-green-600 text-xs">
+                          Closing Price
+                        </div>
+                        <div className="font-medium">
+                          $
+                          {entry.orderDetails.closingPrice?.toFixed(2) || "N/A"}
+                        </div>
+                      </div>
+                      <div className="text-sm">
+                        <div className="text-green-600 text-xs">
+                          Profit/Loss
+                        </div>
+                        <div
+                          className={`font-medium ${
+                            entry.orderDetails.profit > 0
+                              ? "text-green-600"
+                              : entry.orderDetails.profit < 0
+                              ? "text-red-600"
+                              : ""
+                          }`}
+                        >
+                          {entry.orderDetails.profit
+                            ? `$${entry.orderDetails.profit.toFixed(2)}`
+                            : "N/A"}
+                        </div>
+                      </div>
+                      <div className="text-sm">
+                        <div className="text-green-600 text-xs">Status</div>
+                        <div className="font-medium">
+                          {entry.orderDetails.status || "N/A"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {entry.entryType === "LP_POSITION" && entry.lpDetails && (
+                  <div className="bg-purple-50 rounded-md p-3 mb-3">
+                    <div className="flex items-center mb-2">
+                      <Layers size={14} className="text-purple-600 mr-1" />
+                      <h5 className="text-sm font-semibold text-purple-700">
+                        LP Position Details
+                      </h5>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="text-sm">
+                        <div className="text-purple-600 text-xs">
+                          Position ID
+                        </div>
+                        <div className="font-medium">
+                          {entry.lpDetails.positionId || "N/A"}
+                        </div>
+                      </div>
+                      <div className="text-sm">
+                        <div className="text-purple-600 text-xs">Type</div>
+                        <div className="font-medium">
+                          {entry.lpDetails.type || "N/A"}
+                        </div>
+                      </div>
+                      <div className="text-sm">
+                        <div className="text-purple-600 text-xs">Symbol</div>
+                        <div className="font-medium">
+                          {entry.lpDetails.symbol || "N/A"}
+                        </div>
+                      </div>
+                      <div className="text-sm">
+                        <div className="text-purple-600 text-xs">Volume</div>
+                        <div className="font-medium">
+                          {entry.lpDetails.volume || "N/A"}
+                        </div>
+                      </div>
+                      <div className="text-sm">
+                        <div className="text-purple-600 text-xs">
+                          Entry Price
+                        </div>
+                        <div className="font-medium">
+                          ${entry.lpDetails.entryPrice?.toFixed(2) || "N/A"}
+                        </div>
+                      </div>
+                      <div className="text-sm">
+                        <div className="text-purple-600 text-xs">
+                          Closing Price
+                        </div>
+                        <div className="font-medium">
+                          ${entry.lpDetails.closingPrice?.toFixed(2) || "N/A"}
+                        </div>
+                      </div>
+                      <div className="text-sm">
+                        <div className="text-purple-600 text-xs">
+                          Profit/Loss
+                        </div>
+                        <div
+                          className={`font-medium ${
+                            entry.lpDetails.profit > 0
+                              ? "text-green-600"
+                              : entry.lpDetails.profit < 0
+                              ? "text-red-600"
+                              : ""
+                          }`}
+                        >
+                          {entry.lpDetails.profit
+                            ? `$${entry.lpDetails.profit.toFixed(2)}`
+                            : "N/A"}
+                        </div>
+                      </div>
+                      <div className="text-sm">
+                        <div className="text-purple-600 text-xs">Status</div>
+                        <div className="font-medium">
+                          {entry.lpDetails.status || "N/A"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {entry.notes && (
+                  <div className="text-sm mt-2">
+                    <div className="flex items-center">
+                      <Info size={14} className="text-gray-400 mr-1" />
+                      <span className="text-gray-500 text-xs">Notes</span>
+                    </div>
+                    <div className="text-gray-700 mt-1 bg-gray-50 p-2 rounded">
+                      {entry.notes}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </td>
+          </tr>
+        )}
+      </React.Fragment>
+    );
+  };
+
+  // Pagination component
+  const Pagination = ({
+    currentPage,
+    totalPages,
+    paginate,
+    itemsPerPage,
+    setItemsPerPage,
+    totalItems,
+    firstItemIndex,
+    lastItemIndex,
+  }) => {
+    return (
+      <div className="flex flex-col md:flex-row justify-between items-center bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
+        <div className="flex items-center text-sm text-gray-700 mb-4 md:mb-0">
+          <span>Showing </span>
+          <select
+            value={itemsPerPage}
+            onChange={(e) => {
+              setItemsPerPage(Number(e.target.value));
+              paginate(1); // Reset to first page when changing items per page
+            }}
+            className="mx-1 border-gray-300 rounded-md text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value={10}>10</option>
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+          <span>
+            of <span className="font-medium">{totalItems}</span> results
+          </span>
+        </div>
+
+        <div className="flex items-center justify-center space-x-1">
+          <button
+            onClick={() => paginate(1)}
+            disabled={currentPage === 1}
+            className={`relative inline-flex items-center px-2 py-2 rounded-md border border-gray-300 bg-white text-sm font-medium ${
+              currentPage === 1
+                ? "text-gray-300 cursor-not-allowed"
+                : "text-gray-500 hover:bg-gray-50"
+            }`}
+          >
+            <span className="sr-only">First page</span>
+            <ChevronsLeft size={16} />
+          </button>
           <button
             onClick={() => paginate(currentPage - 1)}
             disabled={currentPage === 1}
-            className={`px-3 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 ${
-              currentPage === 1 ? "cursor-not-allowed" : ""
+            className={`relative inline-flex items-center px-2 py-2 rounded-md border border-gray-300 bg-white text-sm font-medium ${
+              currentPage === 1
+                ? "text-gray-300 cursor-not-allowed"
+                : "text-gray-500 hover:bg-gray-50"
             }`}
           >
-            Previous
+            <span className="sr-only">Previous</span>
+            <ChevronLeft size={16} />
           </button>
-          {Array.from({ length: totalPages }, (_, index) => (
-            <button
-              key={index + 1}
-              onClick={() => paginate(index + 1)}
-              className={`px-3 py-2 border border-gray-300 bg-white text-sm font-medium ${
-                currentPage === index + 1
-                  ? "text-blue-600 bg-blue-50"
-                  : "text-gray-500 hover:bg-gray-50"
-              }`}
-            >
-              {index + 1}
-            </button>
-          ))}
+
+          {/* Page numbers */}
+          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+            let pageNum;
+            if (totalPages <= 5) {
+              // If 5 or fewer pages, show all
+              pageNum = i + 1;
+            } else if (currentPage <= 3) {
+              // If near start, show first 5
+              pageNum = i + 1;
+            } else if (currentPage >= totalPages - 2) {
+              // If near end, show last 5
+              pageNum = totalPages - 4 + i;
+            } else {
+              // Otherwise show current and 2 on each side
+              pageNum = currentPage - 2 + i;
+            }
+
+            return (
+              <button
+                key={pageNum}
+                onClick={() => paginate(pageNum)}
+                className={`relative inline-flex items-center px-4 py-2 border ${
+                  currentPage === pageNum
+                    ? "bg-blue-50 border-blue-500 text-blue-600"
+                    : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+                } text-sm font-medium`}
+              >
+                {pageNum}
+              </button>
+            );
+          })}
+
           <button
             onClick={() => paginate(currentPage + 1)}
             disabled={currentPage === totalPages}
-            className={`px-3 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 ${
-              currentPage === totalPages ? "cursor-not-allowed" : ""
+            className={`relative inline-flex items-center px-2 py-2 rounded-md border border-gray-300 bg-white text-sm font-medium ${
+              currentPage === totalPages
+                ? "text-gray-300 cursor-not-allowed"
+                : "text-gray-500 hover:bg-gray-50"
             }`}
           >
-            Next
+            <span className="sr-only">Next</span>
+            <ChevronRight size={16} />
           </button>
-        </nav>
+          <button
+            onClick={() => paginate(totalPages)}
+            disabled={currentPage === totalPages}
+            className={`relative inline-flex items-center px-2 py-2 rounded-md border border-gray-300 bg-white text-sm font-medium ${
+              currentPage === totalPages
+                ? "text-gray-300 cursor-not-allowed"
+                : "text-gray-500 hover:bg-gray-50"
+            }`}
+          >
+            <span className="sr-only">Last page</span>
+            <ChevronsRight size={16} />
+          </button>
+        </div>
       </div>
     );
   };
 
+  // Loading state
   if (loading && !userData) {
     return (
       <div className="fixed inset-0 flex justify-center items-center bg-white">
@@ -453,11 +1019,13 @@ const ProfileManagement = () => {
         )}
 
         {/* Navigation Tabs */}
+        {/* Navigation Tabs */}
         <div className="mb-6">
           <Tabs activeTab={activeTab} onChange={setActiveTab}>
             <Tab id="profile" label="Profile" />
             <Tab id="orders" label="Order Statements" />
             <Tab id="transactions" label="Transaction History" />
+            <Tab id="ledger" label="Ledger Entries" />
           </Tabs>
         </div>
 
@@ -1019,8 +1587,8 @@ const ProfileManagement = () => {
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {currentOrders.map((order) => (
-                          <tr key={order.id} className="hover:bg-gray-50">
+                        {currentOrders.map((order, i) => (
+                          <tr key={i} className="hover:bg-gray-50">
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                               {order.orderNo}
                             </td>
@@ -1035,11 +1603,13 @@ const ProfileManagement = () => {
                               {order.size} oz
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              $ {order.openingPrice + order.user.userSpread}
+                              $ {order?.openingPrice + order.user.userSpread}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {order.closingPrice
-                                ? `$${order.closingPrice + order.user.userSpread}`
+                              {order?.closingPrice
+                                ? `$${
+                                    order?.closingPrice + order.user.userSpread
+                                  }`
                                 : "-"}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm">
@@ -1150,7 +1720,6 @@ const ProfileManagement = () => {
                             className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                           >
                             Date
-
                           </th>
                           <th
                             scope="col"
@@ -1161,8 +1730,8 @@ const ProfileManagement = () => {
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {currentTransactions.map((transaction) => (
-                          <tr key={transaction.id} className="hover:bg-gray-50">
+                        {currentTransactions.map((transaction, i) => (
+                          <tr key={i} className="hover:bg-gray-50">
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                               {transaction.transactionId}
                             </td>
@@ -1211,6 +1780,128 @@ const ProfileManagement = () => {
                 <div className="text-center p-10 bg-white rounded-lg shadow-md">
                   <p className="text-gray-500">No transaction history found.</p>
                 </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "ledger" && (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th scope="col" className="w-10 px-3 py-3"></th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      <div className="flex items-center">
+                        <span>Entry ID</span>
+                        <ArrowDownUp size={14} className="ml-1 text-gray-400" />
+                      </div>
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      <div className="flex items-center">
+                        <span>User</span>
+                        <ArrowDownUp size={14} className="ml-1 text-gray-400" />
+                      </div>
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      <div className="flex items-center">
+                        <span>Type</span>
+                        <ArrowDownUp size={14} className="ml-1 text-gray-400" />
+                      </div>
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      <div className="flex items-center">
+                        <span>Nature</span>
+                        <ArrowDownUp size={14} className="ml-1 text-gray-400" />
+                      </div>
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      <div className="flex items-center">
+                        <span>Reference</span>
+                        <ArrowDownUp size={14} className="ml-1 text-gray-400" />
+                      </div>
+                    </th>
+
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      <div className="flex items-center">
+                        <span>Amount</span>
+                        <ArrowDownUp size={14} className="ml-1 text-gray-400" />
+                      </div>
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      <div className="flex items-center">
+                        <span>Date</span>
+                        <ArrowDownUp size={14} className="ml-1 text-gray-400" />
+                      </div>
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      <div className="flex items-center">
+                        <span>Actions</span>
+                      </div>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {ledgerEntries.length > 0 ? (
+                    ledgerEntries?.map((entry, index) => (
+                      <ExpandableRow
+                        key={entry._id || index}
+                        entry={entry}
+                        index={index}
+                      />
+                    ))
+                  ) : (
+                    <tr>
+                      <td
+                        colSpan="10"
+                        className="px-6 py-12 text-center text-sm text-gray-500"
+                      >
+                        <div className="flex flex-col items-center justify-center">
+                          <AlertTriangle
+                            size={36}
+                            className="text-gray-400 mb-3"
+                          />
+                          <p className="font-medium">No ledger entries found</p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            Try changing your filters or select a different user
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+
+              {/* Ledger pagination */}
+              {ledgerEntries.length > 0 && (
+                <Pagination
+                  currentPage={currentPageTransactions}
+                  totalPages={totalPagesTransactions}
+                  paginate={paginateTransactions}
+                />
               )}
             </div>
           )}

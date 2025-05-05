@@ -17,14 +17,32 @@ import {
   ArrowUpRight,
   ArrowDownRight,
 } from "lucide-react";
-import axiosInstance from "../api/axios";
+import axiosInstance from "../../api/axios";
 
 export default function LpStatements() {
   const adminId = localStorage.getItem("adminId");
   const [users, setUsers] = useState([]);
-  const [activeTab, setActiveTab] = useState("orders"); // "orders" or "profit"
+  const [activeTab, setActiveTab] = useState("orders");
   const [loading, setLoading] = useState(false);
   const [statements, setStatements] = useState([]);
+  const [ledgerEntries, setLedgerEntries] = useState([]);
+  const [ledgerFilters, setLedgerFilters] = useState({
+    entryId: "",
+    entryType: "",
+    entryNature: "",
+    referenceNumber: "",
+    transactionType: "",
+    asset: "",
+    orderType: "",
+    orderStatus: "",
+    symbol: "",
+    positionId: "",
+    positionStatus: "",
+    searchTerm: "",
+    minAmount: "",
+    maxAmount: "",
+    dateRange: "all", // all, today, week, month
+  });
   const [filters, setFilters] = useState({
     id: "",
     type: "",
@@ -40,7 +58,9 @@ export default function LpStatements() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
-
+  const [currentLedgerPage, setCurrentLedgerPage] = useState(1);
+  const [totalLedgerPages, setTotalLedgerPages] = useState(1);
+  const [totalLedgerItems, setTotalLedgerItems] = useState(0);
   // Stats for profit dashboard
   const [profitStats, setProfitStats] = useState({
     totalProfit: 0,
@@ -120,26 +140,26 @@ export default function LpStatements() {
       if (profitValue > 0) {
         totalProfit += profitValue;
         profitableTradesCount++;
-        
+
         if (profitValue > bestTrade.profit) {
-          bestTrade = { 
-            symbol: statement.symbol, 
+          bestTrade = {
+            symbol: statement.symbol,
             profit: profitValue,
             type: statement.type,
             volume: statement.volume,
-            openDate: statement.openDate
+            openDate: statement.openDate,
           };
         }
       } else if (profitValue < 0) {
         totalLoss += Math.abs(profitValue);
-        
+
         if (profitValue < worstTrade.profit) {
-          worstTrade = { 
-            symbol: statement.symbol, 
+          worstTrade = {
+            symbol: statement.symbol,
             profit: profitValue,
             type: statement.type,
             volume: statement.volume,
-            openDate: statement.openDate
+            openDate: statement.openDate,
           };
         }
       }
@@ -147,7 +167,8 @@ export default function LpStatements() {
 
     const netProfit = totalProfit - totalLoss;
     const averageProfit = data.length > 0 ? netProfit / data.length : 0;
-    const profitableTradesPercentage = data.length > 0 ? (profitableTradesCount / data.length) * 100 : 0;
+    const profitableTradesPercentage =
+      data.length > 0 ? (profitableTradesCount / data.length) * 100 : 0;
 
     setProfitStats({
       totalProfit,
@@ -158,7 +179,7 @@ export default function LpStatements() {
       worstTrade,
       profitableTradesCount,
       profitableTradesPercentage,
-      allProfits
+      allProfits,
     });
   };
 
@@ -257,7 +278,10 @@ export default function LpStatements() {
   // Get current page data
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filteredStatements.slice(indexOfFirstItem, indexOfLastItem);
+  const currentItems = filteredStatements.slice(
+    indexOfFirstItem,
+    indexOfLastItem
+  );
 
   // Format date for display
   const formatDate = (timestamp) => {
@@ -411,7 +435,9 @@ export default function LpStatements() {
     <div className="p-6 h-full w-full bg-gray-50">
       <div className="mb-4">
         <h1 className="text-2xl font-bold text-gray-800">LP Statements</h1>
-        <p className="text-gray-600">View and analyze your trading performance</p>
+        <p className="text-gray-600">
+          View and analyze your trading performance
+        </p>
       </div>
 
       {/* User Selection and Tab Navigation */}
@@ -496,7 +522,11 @@ export default function LpStatements() {
 
           {/* Advanced filters */}
           {showFilters && (
-            <div className={`mt-4 grid grid-cols-1 md:grid-cols-${activeTab === "orders" ? "4" : "6"} gap-4`}>
+            <div
+              className={`mt-4 grid grid-cols-1 md:grid-cols-${
+                activeTab === "orders" ? "4" : "6"
+              } gap-4`}
+            >
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Type
@@ -545,7 +575,7 @@ export default function LpStatements() {
                   <option value="month">Last 30 Days</option>
                 </select>
               </div>
-              
+
               {activeTab === "profit" && (
                 <>
                   <div>
@@ -602,12 +632,24 @@ export default function LpStatements() {
               <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-lg shadow-sm">
                 <div className="flex justify-between items-start">
                   <div>
-                    <p className="text-sm text-gray-500 font-medium">Net Profit</p>
-                    <p className={`text-2xl font-bold ${profitStats.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <p className="text-sm text-gray-500 font-medium">
+                      Net Profit
+                    </p>
+                    <p
+                      className={`text-2xl font-bold ${
+                        profitStats.netProfit >= 0
+                          ? "text-green-600"
+                          : "text-red-600"
+                      }`}
+                    >
                       ${profitStats.netProfit.toFixed(2)}
                     </p>
                   </div>
-                  <div className={`rounded-full p-2 ${profitStats.netProfit >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
+                  <div
+                    className={`rounded-full p-2 ${
+                      profitStats.netProfit >= 0 ? "bg-green-100" : "bg-red-100"
+                    }`}
+                  >
                     {profitStats.netProfit >= 0 ? (
                       <TrendingUp size={20} className="text-green-600" />
                     ) : (
@@ -616,11 +658,13 @@ export default function LpStatements() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="bg-gradient-to-r from-green-50 to-green-100 p-4 rounded-lg shadow-sm">
                 <div className="flex justify-between items-start">
                   <div>
-                    <p className="text-sm text-gray-500 font-medium">Total Profit</p>
+                    <p className="text-sm text-gray-500 font-medium">
+                      Total Profit
+                    </p>
                     <p className="text-2xl font-bold text-green-600">
                       ${profitStats.totalProfit.toFixed(2)}
                     </p>
@@ -630,11 +674,13 @@ export default function LpStatements() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="bg-gradient-to-r from-red-50 to-red-100 p-4 rounded-lg shadow-sm">
                 <div className="flex justify-between items-start">
                   <div>
-                    <p className="text-sm text-gray-500 font-medium">Total Loss</p>
+                    <p className="text-sm text-gray-500 font-medium">
+                      Total Loss
+                    </p>
                     <p className="text-2xl font-bold text-red-600">
                       ${profitStats.totalLoss.toFixed(2)}
                     </p>
@@ -644,16 +690,19 @@ export default function LpStatements() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-4 rounded-lg shadow-sm">
                 <div className="flex justify-between items-start">
                   <div>
-                    <p className="text-sm text-gray-500 font-medium">Profitability</p>
+                    <p className="text-sm text-gray-500 font-medium">
+                      Profitability
+                    </p>
                     <p className="text-2xl font-bold text-purple-600">
                       {profitStats.profitableTradesPercentage.toFixed(1)}%
                     </p>
                     <p className="text-xs text-gray-500">
-                      {profitStats.profitableTradesCount} of {statements.length} trades
+                      {profitStats.profitableTradesCount} of {statements.length}{" "}
+                      trades
                     </p>
                   </div>
                   <div className="rounded-full p-2 bg-purple-100">
@@ -662,75 +711,105 @@ export default function LpStatements() {
                 </div>
               </div>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
               {/* Best Trade */}
               <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4">
                 <h3 className="text-lg font-semibold text-gray-800 mb-2 flex items-center">
-                  <TrendingUp size={20} className="mr-2 text-green-600" /> Best Performing Trade
+                  <TrendingUp size={20} className="mr-2 text-green-600" /> Best
+                  Performing Trade
                 </h3>
                 {profitStats.bestTrade.symbol ? (
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-gray-600">Symbol</span>
-                      <span className="font-medium">{profitStats.bestTrade.symbol}</span>
+                      <span className="font-medium">
+                        {profitStats.bestTrade.symbol}
+                      </span>
                     </div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-gray-600">Type</span>
-                      <span className={`font-medium ${profitStats.bestTrade.type === 'BUY' ? 'text-green-600' : 'text-red-600'}`}>
+                      <span
+                        className={`font-medium ${
+                          profitStats.bestTrade.type === "BUY"
+                            ? "text-green-600"
+                            : "text-red-600"
+                        }`}
+                      >
                         {profitStats.bestTrade.type}
                       </span>
                     </div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-gray-600">Volume</span>
-                      <span className="font-medium">{profitStats.bestTrade.volume}</span>
+                      <span className="font-medium">
+                        {profitStats.bestTrade.volume}
+                      </span>
                     </div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-gray-600">Date</span>
-                      <span className="font-medium">{formatDate(profitStats.bestTrade.openDate)}</span>
+                      <span className="font-medium">
+                        {formatDate(profitStats.bestTrade.openDate)}
+                      </span>
                     </div>
                     <div className="flex justify-between items-center text-lg">
                       <span className="text-gray-600">Profit</span>
-                      <span className="font-bold text-green-600">${profitStats.bestTrade.profit.toFixed(2)}</span>
+                      <span className="font-bold text-green-600">
+                        ${profitStats.bestTrade.profit.toFixed(2)}
+                      </span>
                     </div>
                   </div>
                 ) : (
                   <p className="text-gray-500">No profitable trades found</p>
                 )}
               </div>
-              
+
               {/* Worst Trade */}
               <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4">
                 <h3 className="text-lg font-semibold text-gray-800 mb-2 flex items-center">
-                  <TrendingDown size={20} className="mr-2 text-red-600" /> Worst Performing Trade
+                  <TrendingDown size={20} className="mr-2 text-red-600" /> Worst
+                  Performing Trade
                 </h3>
                 {profitStats.worstTrade.symbol ? (
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-gray-600">Symbol</span>
-                      <span className="font-medium">{profitStats.worstTrade.symbol}</span>
+                      <span className="font-medium">
+                        {profitStats.worstTrade.symbol}
+                      </span>
                     </div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-gray-600">Type</span>
-                      <span className={`font-medium ${profitStats.worstTrade.type === 'BUY' ? 'text-green-600' : 'text-red-600'}`}>
+                      <span
+                        className={`font-medium ${
+                          profitStats.worstTrade.type === "BUY"
+                            ? "text-green-600"
+                            : "text-red-600"
+                        }`}
+                      >
                         {profitStats.worstTrade.type}
                       </span>
                     </div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-gray-600">Volume</span>
-                      <span className="font-medium">{profitStats.worstTrade.volume}</span>
+                      <span className="font-medium">
+                        {profitStats.worstTrade.volume}
+                      </span>
                     </div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-gray-600">Date</span>
-                      <span className="font-medium">{formatDate(profitStats.worstTrade.openDate)}</span>
+                      <span className="font-medium">
+                        {formatDate(profitStats.worstTrade.openDate)}
+                      </span>
                     </div>
                     <div className="flex justify-between items-center text-lg">
                       <span className="text-gray-600">Loss</span>
-                      <span className="font-bold text-red-600">${Math.abs(profitStats.worstTrade.profit).toFixed(2)}</span>
+                      <span className="font-bold text-red-600">
+                        ${Math.abs(profitStats.worstTrade.profit).toFixed(2)}
+                      </span>
                     </div>
                   </div>
                 ) : (
-                    <p className="text-gray-500">No loss trades found</p>
+                  <p className="text-gray-500">No loss trades found</p>
                 )}
               </div>
             </div>
@@ -748,11 +827,17 @@ export default function LpStatements() {
             ) : filteredStatements.length === 0 ? (
               <div className="flex flex-col items-center justify-center p-8 text-center">
                 <FileText size={48} className="text-gray-300 mb-4" />
-                <h3 className="text-lg font-medium text-gray-900">No statements found</h3>
+                <h3 className="text-lg font-medium text-gray-900">
+                  No statements found
+                </h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  There are no statements matching your filters or no data available yet.
+                  There are no statements matching your filters or no data
+                  available yet.
                 </p>
-                {(filters.id || filters.type || filters.status || filters.dateRange !== "all") && (
+                {(filters.id ||
+                  filters.type ||
+                  filters.status ||
+                  filters.dateRange !== "all") && (
                   <button
                     onClick={resetFilters}
                     className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
@@ -799,7 +884,7 @@ export default function LpStatements() {
                     >
                       Volume
                     </th>
-                     <th
+                    <th
                       scope="col"
                       className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                     >
@@ -880,7 +965,9 @@ export default function LpStatements() {
                         {formatDate(statement.openDate)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {statement.closeDate ? formatDate(statement.closeDate) : "--"}
+                        {statement.closeDate
+                          ? formatDate(statement.closeDate)
+                          : "--"}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                         {formatProfitLoss(statement.profit)}
@@ -918,7 +1005,7 @@ export default function LpStatements() {
           />
         )}
       </div>
-      
+
       {/* Warning for no data */}
       {statements.length === 0 && !loading && (
         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
@@ -928,7 +1015,8 @@ export default function LpStatements() {
             </div>
             <div className="ml-3">
               <p className="text-sm text-yellow-700">
-                No LP statements data available. Once trading activity occurs, statements will appear here.
+                No LP statements data available. Once trading activity occurs,
+                statements will appear here.
               </p>
             </div>
           </div>

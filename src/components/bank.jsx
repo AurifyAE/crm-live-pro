@@ -135,7 +135,10 @@ export default function Statements() {
         `/fetch-transaction?${queryParams}`
       );
       if (response.data?.data?.transactions) {
-        setTransactions(response.data.data.transactions);
+        const filteredTransactions = response.data.data.transactions.filter(
+          (transaction) => transaction.entityType === "USER"
+        );
+        setTransactions(filteredTransactions);
         setTotalTransactions(response.data.data.pagination.total || 0);
         setTotalTransactionPages(response.data.data.pagination.pages || 1);
       } else {

@@ -1,6 +1,6 @@
 import React from 'react'
 import Sidebar from '../components/sideBar';
-import LpStatement from '../components/lpStatements';
+import LpStatement from '../components/lpStatements/index';
 export default function lpstatementPage() {
     return (
         <>

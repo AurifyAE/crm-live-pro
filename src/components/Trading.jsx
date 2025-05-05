@@ -199,8 +199,8 @@ export default function Trading() {
             ? currentPrice - parseFloat(order.openingPrice) 
             : parseFloat(order.openingPrice) - currentPrice;
           
-          // Store raw difference without multiplying by volume
-          const rawProfit = priceDifference;
+          // Multiply by volume to get actual profit/loss
+          const rawProfit = priceDifference * parseFloat(order.volume);
           
           // Format for display
           const formattedProfit = (rawProfit >= 0 ? "+" : "") + "$" + Math.abs(rawProfit).toFixed(2);
@@ -249,7 +249,8 @@ export default function Trading() {
         profit: orderDetails.profit || "0.00",
         adminId: adminId,
         userId: orderDetails.user,
-        comment: orderDetails.comment || ""
+        comment: orderDetails.comment || "",
+        userSpread:orderDetails.userSpread,
       };
       
       // Send order to the server
@@ -273,6 +274,7 @@ export default function Trading() {
     try {
       // Get the appropriate closing price based on order type
       const orderToClose = orders.find(order => order._id === orderId);
+      
       const closingPrice = orderToClose ? 
         (orderToClose.type === "BUY" ? goldData.bid : goldData.ask) : 
         goldData.bid;
@@ -578,7 +580,7 @@ export default function Trading() {
                         {order.volume}
                       </td>
                       <td className="py-3 px-3 whitespace-nowrap text-right">
-                      ${parseFloat(order.openingPrice).toFixed(2)}
+                      ${parseFloat(order.price).toFixed(2)}
                       </td>
                       <td className="py-3 px-3 whitespace-nowrap text-right font-medium">
                       ${order.currentPrice}

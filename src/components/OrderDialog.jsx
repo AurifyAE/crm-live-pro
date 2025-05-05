@@ -12,9 +12,10 @@ import {
   ReferenceLine,
   AreaChart,
 } from "recharts";
-import { AlertCircle, Check, User } from "lucide-react";
+import { AlertCircle, Check, User, AlertTriangle } from "lucide-react";
 import axiosInstance from "../api/axios";
 import Sound from "../assets/sound.mp3";
+
 const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
   const [volume, setVolume] = useState("1.00");
   const [stopLoss, setStopLoss] = useState("0.00");
@@ -28,8 +29,13 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
   const [loading, setLoading] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [orderDetails, setOrderDetails] = useState(null);
+
   const chartRef = React.useRef(null);
   const [showIndicators, setShowIndicators] = useState(true);
+  // Add new state for insufficient balance alert
+  const [showInsufficientBalanceAlert, setShowInsufficientBalanceAlert] =
+    useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   // Add audio refs for buy and sell sounds
   const buySoundRef = useRef(null);
@@ -194,13 +200,46 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
     return (volumeValue * spreadValue).toFixed(2);
   };
 
+  // New function to check if user has sufficient balance
+  const checkSufficientBalance = (price, volume) => {
+    if (!selectedUserData || !selectedUserData.AMOUNTFC) {
+      setErrorMessage("User account information not available");
+      return false;
+    }
+
+    const userBalance = parseFloat(selectedUserData.AMOUNTFC);
+    const marginPercentage = parseFloat(selectedUserData.margin || 5); // Default to 5% if not set
+    const tradeAmount = parseFloat(price) * parseFloat(volume);
+    const requiredMargin = tradeAmount * (marginPercentage / 100);
+
+    if (userBalance < requiredMargin) {
+      setErrorMessage(
+        `Insufficient balance. Required margin: $${requiredMargin.toFixed(
+          2
+        )}, Available balance: $${userBalance.toFixed(2)}`
+      );
+      return false;
+    }
+
+    return true;
+  };
+
   const handleBuy = () => {
+    // Check if user has sufficient balance
+    if (!checkSufficientBalance(bidPrice, volume)) {
+      setShowInsufficientBalanceAlert(true);
+      return;
+    }
+
     // Play buy sound
     if (buySoundRef.current) {
       buySoundRef.current.play().catch((error) => {
         console.warn("Audio play failed:", error);
       });
     }
+    const marginPercentage = parseFloat(selectedUserData.margin || 5);
+    const tradeAmount = parseFloat(bidPrice) * parseFloat(volume);
+    const requiredMargin = tradeAmount * (marginPercentage / 100);
 
     const orderNo = generateOrderNo();
     const profit = calculateProfit("BUY", volume);
@@ -214,6 +253,8 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
       takeProfit: parseFloat(takeProfit),
       comment,
       user: selectedUser,
+      margin: requiredMargin.toFixed(2),
+      marginPercentage,
       userSpread,
       profit,
       timestamp: new Date().toISOString(),
@@ -229,19 +270,28 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
       price: bidPrice,
       volume: parseFloat(volume),
       symbol: "GOLD",
+      margin: requiredMargin.toFixed(2),
     });
 
     setShowConfirmation(true);
   };
 
   const handleSell = () => {
+    // Check if user has sufficient balance
+    if (!checkSufficientBalance(askPrice, volume)) {
+      setShowInsufficientBalanceAlert(true);
+      return;
+    }
+
     // Play sell sound
     if (sellSoundRef.current) {
       sellSoundRef.current.play().catch((error) => {
         console.warn("Audio play failed:", error);
       });
     }
-
+    const marginPercentage = parseFloat(selectedUserData.margin || 5);
+    const tradeAmount = parseFloat(bidPrice) * parseFloat(volume);
+    const requiredMargin = tradeAmount * (marginPercentage / 100);
     const orderNo = generateOrderNo();
     const profit = calculateProfit("SELL", volume);
     const orderData = {
@@ -255,6 +305,8 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
       comment,
       userSpread,
       profit,
+      margin: requiredMargin.toFixed(2),
+      marginPercentage,
       user: selectedUser,
       timestamp: new Date().toISOString(),
       orderStatus: "PROCESSING",
@@ -269,6 +321,7 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
       price: askPrice,
       volume: parseFloat(volume),
       symbol: "GOLD",
+      margin: requiredMargin.toFixed(2),
     });
 
     setShowConfirmation(true);
@@ -277,6 +330,10 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
   const handleConfirmationClose = () => {
     setShowConfirmation(false);
     onClose();
+  };
+
+  const handleInsufficientBalanceAlertClose = () => {
+    setShowInsufficientBalanceAlert(false);
   };
 
   const handleIncrement = (setter, value, increment = 0.01) => {
@@ -332,6 +389,27 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
     }
     return null;
   };
+
+  // Calculate estimated margin requirement
+  const calculateEstimatedMargin = () => {
+    if (!selectedUserData || !selectedUserData.margin) return null;
+
+    const marginPercentage = parseFloat(selectedUserData.margin);
+    const priceToUse = parseFloat(askPrice); // Using bid price for estimate
+    const volumeValue = parseFloat(volume);
+    const tradeAmount = priceToUse * volumeValue;
+    const requiredMargin = tradeAmount * (marginPercentage / 100);
+
+    return {
+      marginPercentage,
+      requiredMargin: requiredMargin.toFixed(2),
+      userBalance: selectedUserData.AMOUNTFC
+        ? parseFloat(selectedUserData.AMOUNTFC).toFixed(2)
+        : "0.00",
+    };
+  };
+
+  const marginInfo = calculateEstimatedMargin();
 
   if (!isOpen) return null;
 
@@ -743,220 +821,260 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
               )}
             </div>
 
+            {/* Display account balance info when user is selected */}
+            {selectedUser && selectedUserData && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-md shadow-sm">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-sm font-medium text-gray-700">
+                    Account Balance:
+                  </span>
+                  <span className="font-semibold text-blue-700">
+                    $
+                    {selectedUserData.AMOUNTFC
+                      ? parseFloat(selectedUserData.AMOUNTFC).toFixed(2)
+                      : "0.00"}
+                  </span>
+                </div>
+                {marginInfo && (
+                  <div className="text-xs text-gray-600 mt-1">
+                    <div className="flex justify-between mb-1">
+                      <span>
+                        Margin Requirement ({marginInfo.marginPercentage}%):
+                      </span>
+                      <span className="font-semibold">
+                        ${marginInfo.requiredMargin}
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                      <div
+                        className={`h-1.5 rounded-full ${
+                          parseFloat(marginInfo.requiredMargin) >
+                          parseFloat(marginInfo.userBalance)
+                            ? "bg-red-500"
+                            : "bg-green-500"
+                        }`}
+                        style={{
+                          width: `${Math.min(
+                            (parseFloat(marginInfo.requiredMargin) /
+                              parseFloat(marginInfo.userBalance)) *
+                              100,
+                            100
+                          )}%`,
+                        }}
+                      ></div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Volume input */}
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Volume (Oz) :{" "}
+                Volume (Oz):
               </label>
-              <div className="flex">
-                <div className="relative flex-1">
-                  <input
-                    type="text"
-                    value={volume}
-                    onChange={(e) => setVolume(e.target.value)}
-                    className="w-full rounded-md border border-gray-300 p-2 bg-white text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition shadow-inner"
-                  />
-                  <div className="absolute inset-y-0 right-0 flex flex-col">
-                    <button
-                      onClick={() => handleIncrement(setVolume, volume)}
-                      className="border-l border-b border-gray-300 px-2 h-1/2 bg-gray-100 hover:bg-gray-200 rounded-tr-md text-gray-700"
-                    >
-                      ▲
-                    </button>
-                    <button
-                      onClick={() => handleDecrement(setVolume, volume)}
-                      className="border-l border-gray-300 px-2 h-1/2 bg-gray-100 hover:bg-gray-200 rounded-br-md text-gray-700"
-                    >
-                      ▼
-                    </button>
-                  </div>
-                </div>
+              <div className="flex items-center">
+                <button
+                  onClick={() => handleDecrement(setVolume, volume)}
+                  className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-l-md border border-gray-300"
+                >
+                  -
+                </button>
+                <input
+                  type="number"
+                  value={volume}
+                  onChange={(e) => setVolume(e.target.value)}
+                  step="0.01"
+                  min="0.01"
+                  className="w-full text-center py-2 border-t border-b border-gray-300 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <button
+                  onClick={() => handleIncrement(setVolume, volume)}
+                  className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-r-md border border-gray-300"
+                >
+                  +
+                </button>
               </div>
-
-              {/* Volume quick select */}
-              <div className="flex gap-1 mt-1">
-                {volumeSuggestions.map((suggestion) => (
+              <div className="flex space-x-1 mt-1">
+                {volumeSuggestions.map((vol) => (
                   <button
-                    key={suggestion}
-                    onClick={() => setVolume(suggestion.toFixed(2))}
-                    className="flex-1 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded text-center transition text-gray-700 shadow"
+                    key={vol}
+                    onClick={() => setVolume(vol.toFixed(2))}
+                    className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 text-gray-700"
                   >
-                    {suggestion.toFixed(2)}
+                    {vol}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="flex mb-4 gap-4">
-              <div className="w-1/2">
+            {/* Stop Loss / Take Profit inputs */}
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Stop Loss:
                 </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={stopLoss}
-                    onChange={(e) => setStopLoss(e.target.value)}
-                    className="w-full rounded-md border border-gray-300 p-2 bg-white text-gray-700 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition shadow-inner"
-                  />
-                  <div className="absolute inset-y-0 right-0 flex flex-col">
-                    <button
-                      onClick={() => handleIncrement(setStopLoss, stopLoss)}
-                      className="border-l border-b border-gray-300 px-2 h-1/2 bg-gray-100 hover:bg-gray-200 rounded-tr-md text-gray-700"
-                    >
-                      ▲
-                    </button>
-                    <button
-                      onClick={() => handleDecrement(setStopLoss, stopLoss)}
-                      className="border-l border-gray-300 px-2 h-1/2 bg-gray-100 hover:bg-gray-200 rounded-br-md text-gray-700"
-                    >
-                      ▼
-                    </button>
-                  </div>
-                </div>
+                <input
+                  type="number"
+                  value={stopLoss}
+                  onChange={(e) => setStopLoss(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 p-2 focus:ring-red-500 focus:border-red-500"
+                  placeholder="0.00"
+                />
               </div>
-
-              <div className="w-1/2">
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Take Profit:
                 </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={takeProfit}
-                    onChange={(e) => setTakeProfit(e.target.value)}
-                    className="w-full rounded-md border border-gray-300 p-2 bg-white text-gray-700 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition shadow-inner"
-                  />
-                  <div className="absolute inset-y-0 right-0 flex flex-col">
-                    <button
-                      onClick={() => handleIncrement(setTakeProfit, takeProfit)}
-                      className="border-l border-b border-gray-300 px-2 h-1/2 bg-gray-100 hover:bg-gray-200 rounded-tr-md text-gray-700"
-                    >
-                      ▲
-                    </button>
-                    <button
-                      onClick={() => handleDecrement(setTakeProfit, takeProfit)}
-                      className="border-l border-gray-300 px-2 h-1/2 bg-gray-100 hover:bg-gray-200 rounded-br-md text-gray-700"
-                    >
-                      ▼
-                    </button>
-                  </div>
-                </div>
+                <input
+                  type="number"
+                  value={takeProfit}
+                  onChange={(e) => setTakeProfit(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 p-2 focus:ring-green-500 focus:border-green-500"
+                  placeholder="0.00"
+                />
               </div>
             </div>
 
+            {/* Auto SL/TP buttons */}
+            {/* <div className="flex justify-between mb-4">
+           <button
+             onClick={() => calculateOptimalLevels("BUY")}
+             className="px-3 py-2 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded border border-blue-200 text-sm flex-1 mr-2"
+           >
+             Auto Levels (Buy)
+           </button>
+           <button
+             onClick={() => calculateOptimalLevels("SELL")}
+             className="px-3 py-2 bg-red-100 hover:bg-red-200 text-red-800 rounded border border-red-200 text-sm flex-1"
+           >
+             Auto Levels (Sell)
+           </button>
+         </div> */}
+
+            {/* Comment input */}
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Comment (Optional):
+                Comment:
               </label>
-              <textarea
+              <input
+                type="text"
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
-                className="w-full rounded-md border border-gray-300 p-2 bg-white text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition shadow-inner"
-                placeholder="Add a comment to this order..."
-                rows={2}
-              ></textarea>
+                className="w-full rounded-md border border-gray-300 p-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Add comment (optional)"
+              />
             </div>
 
-            {/* Order buttons */}
-            <div className="mt-6 flex gap-4">
+            {/* Buy/Sell buttons */}
+            <div className="grid grid-cols-2 gap-4 mb-4">
               <button
                 onClick={handleBuy}
                 disabled={!selectedUser}
-                className={`w-1/2 py-3 rounded-md text-white font-medium text-lg transition shadow-lg
-    ${
-      selectedUser
-        ? "bg-gradient-to-r from-blue-500 to-blue-600  hover:from-blue-600 hover:to-blue-700"
-        : "bg-gray-400 cursor-not-allowed"
-    }`}
+                className={`py-3 rounded-md font-semibold text-white shadow-lg ${
+                  selectedUser
+                    ? "bg-green-600 hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                    : "bg-gray-400 cursor-not-allowed"
+                }`}
               >
-              <span>Buy {bidPrice}</span>
+                BUY at {bidPrice}
               </button>
               <button
                 onClick={handleSell}
                 disabled={!selectedUser}
-                className={`w-1/2 py-3 rounded-md text-white font-medium text-lg transition shadow-lg
-    ${
-      selectedUser
-        ? "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700"
-        : "bg-gray-400 cursor-not-allowed"
-    }`}
+                className={`py-3 rounded-md font-semibold text-white shadow-lg ${
+                  selectedUser
+                    ? "bg-red-600 hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                    : "bg-gray-400 cursor-not-allowed"
+                }`}
               >
-               <span>Sell {askPrice}</span>
+                SELL at {askPrice}
               </button>
             </div>
+
+            {/* User selection warning */}
+            {!selectedUser && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-md text-amber-700 text-sm flex items-start mb-4">
+                <AlertTriangle className="h-5 w-5 mr-2 flex-shrink-0 text-amber-500" />
+                <span>Please select a user before placing an order.</span>
+              </div>
+            )}
           </div>
         </div>
+      </div>
 
-        {/* Order confirmation modal */}
-        {showConfirmation && (
-          <div className="fixed inset-0 bg-black/50 bg-opacity-70 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg w-96 shadow-2xl overflow-hidden">
-              <div className="bg-green-50 p-4 border-b border-green-100">
-                <div className="flex items-center justify-center mb-2">
-                  <div className="bg-green-100 rounded-full p-2">
-                    <Check className="h-8 w-8 text-green-600" />
-                  </div>
-                </div>
-                <h3 className="text-lg font-semibold text-center text-green-800">
-                  Order Placed Successfully
-                </h3>
+      {/* Order confirmation dialog */}
+      {showConfirmation && (
+        <div className="fixed inset-0 bg-white/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-center mb-4 text-green-600">
+              <Check className="h-12 w-12" />
+            </div>
+            <h3 className="text-xl font-bold text-center text-gray-800 mb-2">
+              Order Placed Successfully
+            </h3>
+            <div className="bg-gray-50 rounded-md p-4 mb-4 border border-gray-200">
+              <div className="flex justify-between mb-2">
+                <span className="text-gray-600">Order No:</span>
+                <span className="font-mono font-semibold">
+                  {orderDetails?.orderNo}
+                </span>
               </div>
-
-              <div className="p-4">
-                <div className="text-sm mb-4">
-                  <div className="grid grid-cols-2 gap-2 mb-4">
-                    <div className="text-gray-600">Order Number:</div>
-                    <div className="font-semibold text-gray-800">
-                      {orderDetails?.orderNo}
-                    </div>
-
-                    <div className="text-gray-600">Type:</div>
-                    <div
-                      className={`font-semibold ${
-                        orderDetails?.type === "BUY"
-                          ? "text-green-700"
-                          : "text-red-700"
-                      }`}
-                    >
-                      {orderDetails?.type}
-                    </div>
-
-                    <div className="text-gray-600">Symbol:</div>
-                    <div className="font-semibold text-gray-800">
-                      {orderDetails?.symbol}
-                    </div>
-
-                    <div className="text-gray-600">Price:</div>
-                    <div className="font-semibold text-gray-800">
-                      ${orderDetails?.price}
-                    </div>
-
-                    <div className="text-gray-600">Volume:</div>
-                    <div className="font-semibold text-gray-800">
-                      {orderDetails?.volume} oz
-                    </div>
-                  </div>
-
-                  <p className="bg-yellow-50 border border-yellow-200 rounded-md p-3 text-sm text-yellow-800 flex items-start">
-                    <AlertCircle className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0 text-yellow-600" />
-                    Your order has been placed and is being processed. You can
-                    view and manage this order from the Orders panel.
-                  </p>
-                </div>
-
-                <div className="flex justify-end">
-                  <button
-                    onClick={handleConfirmationClose}
-                    className="py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition shadow"
-                  >
-                    OK
-                  </button>
-                </div>
+              <div className="flex justify-between mb-2">
+                <span className="text-gray-600">Symbol:</span>
+                <span className="font-semibold">{orderDetails?.symbol}</span>
+              </div>
+              <div className="flex justify-between mb-2">
+                <span className="text-gray-600">Type:</span>
+                <span
+                  className={`font-semibold ${
+                    orderDetails?.type === "BUY"
+                      ? "text-green-600"
+                      : "text-red-600"
+                  }`}
+                >
+                  {orderDetails?.type}
+                </span>
+              </div>
+              <div className="flex justify-between mb-2">
+                <span className="text-gray-600">Price:</span>
+                <span className="font-semibold">{orderDetails?.price}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Volume:</span>
+                <span className="font-semibold">{orderDetails?.volume}</span>
               </div>
             </div>
+            <button
+              onClick={handleConfirmationClose}
+              className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              Close
+            </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Insufficient balance alert */}
+      {showInsufficientBalanceAlert && (
+        <div className="fixed inset-0  bg-white/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-center mb-4 text-red-600">
+              <AlertCircle className="h-12 w-12" />
+            </div>
+            <h3 className="text-xl font-bold text-center text-gray-800 mb-2">
+              Insufficient Balance
+            </h3>
+            <p className="text-center text-gray-600 mb-4">{errorMessage}</p>
+            <button
+              onClick={handleInsufficientBalanceAlertClose}
+              className="w-full py-2 bg-red-600 hover:bg-red-700 text-white rounded-md font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
