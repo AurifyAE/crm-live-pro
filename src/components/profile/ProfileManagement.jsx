@@ -33,6 +33,7 @@ import {
   Package,
   X,
 } from "lucide-react";
+import LedgerTab from "../lpStatements/LedgerTab";
 
 const ProfileManagement = () => {
   const { userId } = useParams();
@@ -1162,9 +1163,9 @@ const ProfileManagement = () => {
                     <Badge color={getStatusBadgeColor(userData.status)}>
                       {mapAccountStatusToDisplay(userData.status)}
                     </Badge>
-                    <Badge color={getStatusBadgeColor(userData.kycStatus)}>
+                    {/* <Badge color={getStatusBadgeColor(userData.kycStatus)}>
                       KYC: {mapKycStatusToDisplay(userData.kycStatus)}
-                    </Badge>
+                    </Badge> */}
                   </div>
                 </div>
                 <div className="text-right">
@@ -1267,7 +1268,7 @@ const ProfileManagement = () => {
                       </select>
                     </div>
 
-                    <div>
+                    {/* <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         KYC Status
                       </label>
@@ -1282,7 +1283,7 @@ const ProfileManagement = () => {
                         <option value="rejected">Rejected</option>
                         <option value="not_submitted">Not Submitted</option>
                       </select>
-                    </div>
+                    </div> */}
                   </div>
 
                   {/* Trading Preferences */}
@@ -1335,7 +1336,7 @@ const ProfileManagement = () => {
                         />
                       </div>
 
-                      <div className="flex items-center mt-6">
+                      {/* <div className="flex items-center mt-6">
                         <input
                           type="checkbox"
                           id="autoTrading"
@@ -1352,7 +1353,7 @@ const ProfileManagement = () => {
                         >
                           Enable Auto Trading
                         </label>
-                      </div>
+                      </div> */}
                     </div>
                   </div>
                 </form>
@@ -1460,7 +1461,7 @@ const ProfileManagement = () => {
                           </Badge>
                         </dd>
                       </div>
-                      <div className="sm:grid sm:grid-cols-3 sm:gap-4">
+                      {/* <div className="sm:grid sm:grid-cols-3 sm:gap-4">
                         <dt className="text-sm font-medium text-gray-500">
                           KYC Status
                         </dt>
@@ -1471,7 +1472,7 @@ const ProfileManagement = () => {
                             {mapKycStatusToDisplay(userData.kycStatus)}
                           </Badge>
                         </dd>
-                      </div>
+                      </div> */}
                       <div className="sm:grid sm:grid-cols-3 sm:gap-4">
                         <dt className="text-sm font-medium text-gray-500">
                           Risk Level
@@ -1587,7 +1588,7 @@ const ProfileManagement = () => {
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {currentOrders.map((order, i) => (
+                        {currentOrders?.map((order, i) => (
                           <tr key={i} className="hover:bg-gray-50">
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                               {order.orderNo}
@@ -1599,16 +1600,17 @@ const ProfileManagement = () => {
                                 {order.type}
                               </Badge>
                             </td>
+                            
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {order.size} oz
+                              {order.volume} oz
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              $ {order?.openingPrice + order.user.userSpread}
+                              $ {order?.openingPrice}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                               {order?.closingPrice
                                 ? `$${
-                                    order?.closingPrice + order.user.userSpread
+                                    order?.closingPrice
                                   }`
                                 : "-"}
                             </td>
@@ -1785,125 +1787,17 @@ const ProfileManagement = () => {
           )}
 
           {activeTab === "ledger" && (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th scope="col" className="w-10 px-3 py-3"></th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      <div className="flex items-center">
-                        <span>Entry ID</span>
-                        <ArrowDownUp size={14} className="ml-1 text-gray-400" />
-                      </div>
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      <div className="flex items-center">
-                        <span>User</span>
-                        <ArrowDownUp size={14} className="ml-1 text-gray-400" />
-                      </div>
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      <div className="flex items-center">
-                        <span>Type</span>
-                        <ArrowDownUp size={14} className="ml-1 text-gray-400" />
-                      </div>
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      <div className="flex items-center">
-                        <span>Nature</span>
-                        <ArrowDownUp size={14} className="ml-1 text-gray-400" />
-                      </div>
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      <div className="flex items-center">
-                        <span>Reference</span>
-                        <ArrowDownUp size={14} className="ml-1 text-gray-400" />
-                      </div>
-                    </th>
-
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      <div className="flex items-center">
-                        <span>Amount</span>
-                        <ArrowDownUp size={14} className="ml-1 text-gray-400" />
-                      </div>
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      <div className="flex items-center">
-                        <span>Date</span>
-                        <ArrowDownUp size={14} className="ml-1 text-gray-400" />
-                      </div>
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      <div className="flex items-center">
-                        <span>Actions</span>
-                      </div>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {ledgerEntries.length > 0 ? (
-                    ledgerEntries?.map((entry, index) => (
-                      <ExpandableRow
-                        key={entry._id || index}
-                        entry={entry}
-                        index={index}
-                      />
-                    ))
-                  ) : (
-                    <tr>
-                      <td
-                        colSpan="10"
-                        className="px-6 py-12 text-center text-sm text-gray-500"
-                      >
-                        <div className="flex flex-col items-center justify-center">
-                          <AlertTriangle
-                            size={36}
-                            className="text-gray-400 mb-3"
-                          />
-                          <p className="font-medium">No ledger entries found</p>
-                          <p className="text-xs text-gray-400 mt-1">
-                            Try changing your filters or select a different user
-                          </p>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-
-              {/* Ledger pagination */}
-              {ledgerEntries.length > 0 && (
-                <Pagination
-                  currentPage={currentPageTransactions}
-                  totalPages={totalPagesTransactions}
-                  paginate={paginateTransactions}
-                />
-              )}
-            </div>
+            <LedgerTab
+            loading={loading}
+            ledgerEntries={ledgerEntries}
+            currentLedgerPage={currentLedgerPage}
+            totalLedgerPages={totalLedgerPages}
+            totalLedgerItems={totalLedgerItems}
+            itemsPerPage={itemsPerPage}
+            setItemsPerPage={setItemsPerPage}
+            setCurrentLedgerPage={setCurrentLedgerPage}
+            formatDate={formatDate}
+          />
           )}
         </div>
       </div>

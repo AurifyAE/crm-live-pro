@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import useMarketData from "../components/marketData";
 import TradingViewWidget from "./TradingViewWidget";
-import OrderDialog from "./OrderDialog"; 
+import OrderDialog from "./OrderDialog";
 import axios from "../api/axios";
 
 export default function Trading() {
@@ -39,8 +39,8 @@ export default function Trading() {
   const [isOrderDialogOpen, setIsOrderDialogOpen] = useState(false);
   const [orders, setOrders] = useState([]);
   const [showTotalProfit, setShowTotalProfit] = useState(false);
-  
-  console.log(orders)
+
+  console.log(orders);
   const [tableHeaders, setTableHeaders] = useState([
     { key: "orderNo", label: "Order ID", align: "left" },
     { key: "symbol", label: "Symbol", align: "left" },
@@ -60,19 +60,21 @@ export default function Trading() {
   }, []);
 
   const toggleTotalProfit = () => {
-    setShowTotalProfit(prevState => !prevState);
+    setShowTotalProfit((prevState) => !prevState);
   };
 
   const calculateTotalProfit = () => {
     if (orders.length === 0) return "0.00";
-        const total = orders.reduce((sum, order) => {
-      const profitValue = order.rawProfit !== undefined 
-        ? order.rawProfit 
-        : parseFloat(order.profit.replace(/[^0-9.-]+/g, "")) * (order.profit.includes("-") ? -1 : 1);
-      
+    const total = orders.reduce((sum, order) => {
+      const profitValue =
+        order.rawProfit !== undefined
+          ? order.rawProfit
+          : parseFloat(order.profit.replace(/[^0-9.-]+/g, "")) *
+            (order.profit.includes("-") ? -1 : 1);
+
       return sum + (isNaN(profitValue) ? 0 : profitValue);
     }, 0);
-    
+
     return total.toFixed(2);
   };
 
@@ -82,21 +84,24 @@ export default function Trading() {
       if (response.data.success && response.data.data) {
         // Filter orders with status "PROCESSING"
         const processingOrders = response.data.data.filter(
-          order => order.orderStatus === "PROCESSING"
+          (order) => order.orderStatus === "PROCESSING"
         );
-        
-        // Process orders to include user information 
-        const processedOrders = processingOrders.map(order => {
+
+        // Process orders to include user information
+        const processedOrders = processingOrders.map((order) => {
           return {
             ...order,
             profit: order.profit,
             rawProfit: parseFloat(order.profit || 0),
             accountHead: order.user?.ACCOUNT_HEAD || "N/A",
-            userName: `${order.user?.firstName || ""} ${order.user?.lastName || ""}`.trim() || "N/A",
+            userName:
+              `${order.user?.firstName || ""} ${
+                order.user?.lastName || ""
+              }`.trim() || "N/A",
             // We'll update the currentPrice and profit in the useEffect for goldData
           };
         });
-        
+
         setOrders(processedOrders);
       }
     } catch (error) {
@@ -187,35 +192,53 @@ export default function Trading() {
     }
   }, [goldData.priceUpdateTimestamp]);
 
+  const TROY_OUNCE_TO_GRAM = 31.103;
+  const USD_TO_AED = 3.674;
+  const TTB_FACTOR = 116.64;
+
   useEffect(() => {
     if (goldData.bid !== null && goldData.ask !== null) {
       setOrders((prevOrders) =>
         prevOrders.map((order) => {
           // Use the appropriate price based on order type
-          const currentPrice = order.type === "BUY" ? goldData.bid : goldData.ask;
-          
-          // Calculate price difference based on order type
-          const priceDifference = order.type === "BUY" 
-            ? currentPrice - parseFloat(order.openingPrice) 
-            : parseFloat(order.openingPrice) - currentPrice;
-          
+          const currentPrice =
+            order.type === "BUY" ? goldData.bid : goldData.ask;
+
+          // Convert opening price to AED and TTB
+          const openingPriceConverted =
+            (parseFloat(order.openingPrice) / TROY_OUNCE_TO_GRAM) *
+            USD_TO_AED *
+            TTB_FACTOR;
+
+          // Convert current price to AED and TTB
+          const currentPriceConverted =
+            (currentPrice / TROY_OUNCE_TO_GRAM) * USD_TO_AED * TTB_FACTOR;
+
+          // Calculate price difference based on order type with conversion
+          const priceDifference =
+            order.type === "BUY"
+              ? currentPriceConverted - openingPriceConverted
+              : openingPriceConverted - currentPriceConverted;
+
           // Multiply by volume to get actual profit/loss
           const rawProfit = priceDifference * parseFloat(order.volume);
-          
-          // Format for display
-          const formattedProfit = (rawProfit >= 0 ? "+" : "") + "$" + Math.abs(rawProfit).toFixed(2);
-          
+
+          // Format for display - now showing as AED
+          const formattedProfit =
+            (rawProfit >= 0 ? "+" : "-") +
+            "AED " +
+            Math.abs(rawProfit).toFixed(2);
+
           return {
             ...order,
             currentPrice: currentPrice.toFixed(2),
             rawProfit: rawProfit, // Store raw value for calculations
-            profit: formattedProfit
+            profit: formattedProfit,
           };
         })
       );
     }
   }, [goldData.bid, goldData.ask]);
-
   // Handler for opening the order dialog
   const handleOpenOrderDialog = () => {
     setIsOrderDialogOpen(true);
@@ -229,10 +252,10 @@ export default function Trading() {
   // Handler for placing new orders
   const handlePlaceOrder = async (orderDetails) => {
     try {
-      console.log(orderDetails)
+      console.log(orderDetails);
       // Generate unique order number if not provided
       const orderNo = orderDetails.orderNo || `ORD-${Date.now()}`;
-      
+
       const orderData = {
         orderNo: orderNo,
         type: orderDetails.type,
@@ -250,12 +273,12 @@ export default function Trading() {
         adminId: adminId,
         userId: orderDetails.user,
         comment: orderDetails.comment || "",
-        userSpread:orderDetails.userSpread,
+        userSpread: orderDetails.userSpread,
       };
-      
+
       // Send order to the server
       const response = await axios.post(`/create-order/${adminId}`, orderData);
-      
+
       if (response.data.success) {
         // Refresh orders list to include the new order
         fetchOrders();
@@ -273,12 +296,14 @@ export default function Trading() {
   const handleCloseOrder = async (orderId) => {
     try {
       // Get the appropriate closing price based on order type
-      const orderToClose = orders.find(order => order._id === orderId);
-      
-      const closingPrice = orderToClose ? 
-        (orderToClose.type === "BUY" ? goldData.bid : goldData.ask) : 
-        goldData.bid;
-      
+      const orderToClose = orders.find((order) => order._id === orderId);
+
+      const closingPrice = orderToClose
+        ? orderToClose.type === "BUY"
+          ? goldData.bid
+          : goldData.ask
+        : goldData.bid;
+
       // Update order status to "CLOSED" with correct parameters
       const response = await axios.patch(`/order/${adminId}/${orderId}`, {
         orderStatus: "CLOSED",
@@ -286,7 +311,7 @@ export default function Trading() {
         closingPrice: closingPrice,
         profit: orderToClose ? orderToClose.rawProfit : 0, // Send the raw profit value
       });
-      
+
       if (response.data.success) {
         // Refresh orders list
         fetchOrders();
@@ -332,10 +357,11 @@ export default function Trading() {
 
   // Helper function to get profit/loss color
   const getProfitColor = (profitValue) => {
-    if (profitValue === null || profitValue === undefined) return "text-gray-600";
-    
+    if (profitValue === null || profitValue === undefined)
+      return "text-gray-600";
+
     // Check if profitValue is a string or number
-    if (typeof profitValue === 'string') {
+    if (typeof profitValue === "string") {
       return profitValue.includes("+") ? "text-green-600" : "text-red-600";
     } else {
       // If it's a number, check if it's positive or negative
@@ -542,7 +568,7 @@ export default function Trading() {
             <thead className="bg-gray-100">
               <tr>
                 {tableHeaders.map((header) => (
-                  <th 
+                  <th
                     key={header.key}
                     className={`py-3 px-3 text-${header.align} text-xs font-medium text-gray-600 uppercase tracking-wider`}
                   >
@@ -580,12 +606,12 @@ export default function Trading() {
                         {order.volume}
                       </td>
                       <td className="py-3 px-3 whitespace-nowrap text-right">
-                      ${parseFloat(order.price).toFixed(2)}
+                        ${parseFloat(order.price).toFixed(2)}
                       </td>
                       <td className="py-3 px-3 whitespace-nowrap text-right font-medium">
-                      ${order.currentPrice}
+                        ${order.currentPrice}
                       </td>
-                     
+
                       <td className="py-3 px-3 whitespace-nowrap text-left">
                         <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-md text-xs font-medium">
                           {order.accountHead}
@@ -597,11 +623,15 @@ export default function Trading() {
                           {formatDate(order.openingDate)}
                         </div>
                       </td>
-                      <td className={`py-3 px-3 whitespace-nowrap text-right font-medium ${getProfitColor(order.profit)}`}>
+                      <td
+                        className={`py-3 px-3 whitespace-nowrap text-right font-medium ${getProfitColor(
+                          order.profit
+                        )}`}
+                      >
                         {order.profit}
                       </td>
                       <td className="py-3 px-3 whitespace-nowrap text-center">
-                        <button 
+                        <button
                           onClick={() => handleCloseOrder(order._id)}
                           className="bg-red-100 text-red-600 px-3 py-1 rounded hover:bg-red-200 mr-2 text-xs font-medium transition-colors"
                         >
@@ -610,18 +640,24 @@ export default function Trading() {
                       </td>
                     </tr>
                   ))}
-                  
+
                   {/* Total Profit Row - Only shown when toggled */}
                   {showTotalProfit && (
                     <tr className="bg-gray-100 font-bold border-t-2 border-gray-300">
                       <td colSpan={8} className="py-3 px-3 text-right">
                         Total Profit/Loss:
                       </td>
-                      <td className={`py-3 px-3 whitespace-nowrap text-right font-bold ${
-                        parseFloat(calculateTotalProfit()) >= 0 ? "text-green-600" : "text-red-600"
-                      }`}>
-                        {parseFloat(calculateTotalProfit()) >= 0 ? "+" : ""}
-                        ${Math.abs(parseFloat(calculateTotalProfit())).toFixed(2)}
+                      <td
+                        className={`py-3 px-3 whitespace-nowrap text-right font-bold ${
+                          parseFloat(calculateTotalProfit()) >= 0
+                            ? "text-green-600"
+                            : "text-red-600"
+                        }`}
+                      >
+                        {parseFloat(calculateTotalProfit()) >= 0 ? "+" : ""}$
+                        {Math.abs(parseFloat(calculateTotalProfit())).toFixed(
+                          2
+                        )}
                       </td>
                       <td></td>
                     </tr>
@@ -629,7 +665,10 @@ export default function Trading() {
                 </>
               ) : (
                 <tr>
-                  <td colSpan={tableHeaders.length} className="py-6 text-center text-gray-500">
+                  <td
+                    colSpan={tableHeaders.length}
+                    className="py-6 text-center text-gray-500"
+                  >
                     No open positions found. Click "New Order" to place a trade.
                   </td>
                 </tr>
