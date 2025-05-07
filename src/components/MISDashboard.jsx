@@ -37,22 +37,19 @@ import {
 } from "recharts";
 import useMarketData from "../components/marketData";
 import axiosInstance from "../api/axios";
-const adminId = localStorage.getItem("adminId");
 
 // Dashboard component
 const EnhancedMISDashboard = () => {
   const [activeTab, setActiveTab] = useState("risk");
   const [accountType, setAccountType] = useState("all");
   const [accountData, setAccountData] = useState([]);
-  console.log(accountData)
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [liveRate, setLiveRate] = useState(0);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [selectedBank, setSelectedBank] = useState("");
-
   const { marketData } = useMarketData(["GOLD"]);
-console.log(marketData);
+  const adminId = localStorage.getItem("adminId");
 
   // Calculate risk level based on account type
   const calculateRiskLevel = useCallback((item, accountType) => {
@@ -145,6 +142,7 @@ console.log(marketData);
   // Fetch data from backend
   const fetchAccountData = useCallback(async () => {
     try {
+      const adminId = localStorage.getItem("adminId");
       setLoading(true);
       const response = await axiosInstance.get(`/fetch-data/${adminId}`);
 

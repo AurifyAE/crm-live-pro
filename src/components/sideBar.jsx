@@ -41,7 +41,6 @@ const Sidebar = () => {
 
     // Clear all authentication data
     localStorage.removeItem("token");
-    localStorage.removeItem("userName");
     localStorage.removeItem("adminId");
     localStorage.removeItem("rememberMe");
 

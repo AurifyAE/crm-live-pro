@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -14,7 +14,53 @@ const LoginPage = () => {
   const [userNameError, setUserNameError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const navigate = useNavigate();
+
+  // Check for existing token when component mounts
+  useEffect(() => {
+    const checkExistingToken = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setIsCheckingAuth(false);
+        return;
+      }
+
+      try {
+        // Verify the token with the backend
+        const response = await axios.post("/verify-token", { token });
+        
+        // Check if valid admin in response
+        if (response.data.admin) {
+          // Token is valid, navigate to dashboard
+          navigate("/dashboard");
+        } else {
+          // Response doesn't contain admin data despite success
+          handleLogout();
+        }
+      } catch (error) {
+        console.error("Token verification error:", error);
+        handleLogout();
+        
+        // Show error message if service expired
+        const errorResponse = error.response?.data;
+        if (errorResponse && errorResponse.serviceExpired) {
+          toast.error("Your service has expired. Please renew your subscription.");
+        }
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+
+    checkExistingToken();
+  }, [navigate]);
+
+  const handleLogout = () => {
+    // Clear all auth related data
+    localStorage.removeItem("token");
+    localStorage.removeItem("adminId");
+    localStorage.removeItem("rememberMe");
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -61,6 +107,12 @@ const LoginPage = () => {
         localStorage.setItem("token", token);
         localStorage.setItem("adminId", admin._id);
         
+        // Save username if remember me is checked
+        if (rememberMe) {
+          localStorage.setItem("userName", userName);
+          localStorage.setItem("rememberMe", "true");
+        }
+        
         // Navigate to dashboard after toast
         setTimeout(() => {
           navigate("/dashboard");
@@ -94,6 +146,26 @@ const LoginPage = () => {
       setIsLoading(false);
     }
   };
+
+  // Set remembered username if available
+  useEffect(() => {
+    const rememberedUser = localStorage.getItem("userName");
+    const isRemembered = localStorage.getItem("rememberMe") === "true";
+    
+    if (rememberedUser && isRemembered) {
+      setUserName(rememberedUser);
+      setRememberMe(true);
+    }
+  }, []);
+
+  // Show loading spinner while checking authentication
+  if (isCheckingAuth) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen w-full bg-gray-50 overflow-hidden">

@@ -14,10 +14,13 @@ import ProfilePage from '../pages/ProfilePage'
 import Trading from '../pages/TradingPage'
 import Statement from '../pages/statementPage'
 import LpStatement from '../pages/lpStatementsPage'
+import Protect from "../protectorRouter/adminProtect";
+
 export default function UserRouter() {
   return (
     <Routes>
       <Route path="/" element={<Login />} />
+      <Route element={<Protect />}>
       <Route path="/dashboard" element={<HomePage />} />
       <Route path="/debtor" element={<DebtorPage />} />
       <Route path="/user-data" element={<AllUsersPage />} />
@@ -30,6 +33,7 @@ export default function UserRouter() {
       <Route path="/statements" element={<Statement />} />
       <Route path="/lp-statement" element={<LpStatement />} />
       <Route path="/profile/:userId" element={<ProfilePage />} />
+      </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
