@@ -359,11 +359,11 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
     setShowInsufficientBalanceAlert(false);
   };
 
-  const handleIncrement = (setter, value, increment = 0.01) => {
+  const handleIncrement = (setter, value, increment = 1) => {
     setter((parseFloat(value) + increment).toFixed(2));
   };
 
-  const handleDecrement = (setter, value, decrement = 0.01) => {
+  const handleDecrement = (setter, value, decrement = 1) => {
     const result = parseFloat(value) - decrement;
     setter((result >= 0 ? result : 0).toFixed(2));
   };
@@ -945,8 +945,6 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
                   type="number"
                   value={volume}
                   onChange={(e) => setVolume(e.target.value)}
-                  step="0.01"
-                  min="0.01"
                   className="w-full text-center py-2 border-t border-b border-gray-300 focus:ring-blue-500 focus:border-blue-500"
                 />
                 <button
