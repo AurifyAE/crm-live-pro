@@ -1447,16 +1447,14 @@ export default function Statements() {
                         </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                        {statement.volume}
+                        {statement.volume} TTBAR
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                        {statement.openingPrice }
+                        {statement.openingPrice}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                         {statement.closingPrice
-                          ? `${
-                              statement.closingPrice
-                            }`
+                          ? `${statement.closingPrice}`
                           : "-"}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
@@ -1472,6 +1470,7 @@ export default function Statements() {
                               : "text-gray-500"
                           }`}
                         >
+                          {statement.profit ? "AED" : "-"}{" "}
                           {statement.profit ? statement.profit.toFixed(2) : "-"}
                         </span>
                       </td>

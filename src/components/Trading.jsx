@@ -274,6 +274,8 @@ export default function Trading() {
         userId: orderDetails.user,
         comment: orderDetails.comment || "",
         userSpread: orderDetails.userSpread,
+        requiredMargin:orderDetails.totalNeededAmount,
+
       };
 
       // Send order to the server

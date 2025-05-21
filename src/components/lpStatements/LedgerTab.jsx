@@ -173,7 +173,7 @@ const LedgerTab = ({
     if (!amount && amount !== 0) return "0.00";
 
     if (asset === "GOLD") {
-      return `${amount.toFixed(3)} Oz`;
+      return `${amount.toFixed(3)} TTBAR`;
     } else {
       return `AED ${amount.toFixed(2)}`;
     }
@@ -858,20 +858,20 @@ const LedgerTab = ({
               <div>
                 <div className="text-xs text-yellow-600 mb-1">Debits</div>
                 <div className="text-red-600 font-semibold">
-                  {totalGoldDebit.toFixed(3)} Oz
+                  {totalGoldDebit.toFixed(3)} TTBAR
                 </div>
               </div>
               <div>
                 <div className="text-xs text-yellow-600 mb-1">Credits</div>
                 <div className="text-green-600 font-semibold">
-                  {totalGoldCredit.toFixed(3)} Oz
+                  {totalGoldCredit.toFixed(3)} TTBAR
                 </div>
               </div>
             </div>
             <div className="mt-3 pt-2 border-t border-yellow-100">
               <div className="text-xs text-yellow-600 mb-1">Net Balance</div>
               <div className={`font-bold text-lg ${netGoldBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {netGoldBalance.toFixed(3)} Oz
+                {netGoldBalance.toFixed(3)} TTBAR
               </div>
             </div>
           </div>

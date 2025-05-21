@@ -5,24 +5,16 @@
  * @param {string|Date} dateString - ISO date string or Date object
  * @returns {string} Formatted date string
  */
-export const formatDate = (dateString) => {
-    if (!dateString) return '-';
-    
-    const date = new Date(dateString);
-    
-    // Check if date is valid
-    if (isNaN(date.getTime())) return dateString;
-    
-    // Format: Apr 23, 2025, 10:15 AM
-    return new Intl.DateTimeFormat('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: 'numeric',
-      hour12: true
-    }).format(date);
-  };
+export const formatDate = (date) => {
+  if (!date) return "N/A";
+  return new Date(date).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
   
   /**
    * Format a number as currency

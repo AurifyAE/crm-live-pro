@@ -12,12 +12,20 @@ import {
   ReferenceLine,
   AreaChart,
 } from "recharts";
-import { AlertCircle, Check, User, AlertTriangle, Info } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  User,
+  AlertTriangle,
+  Info,
+  CheckCircle,
+  ArrowRight,
+} from "lucide-react";
 import axiosInstance from "../api/axios";
 import Sound from "../assets/sound.mp3";
 
 const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
-  const [volume, setVolume] = useState("1.00");
+  const [volume, setVolume] = useState("1");
   const [stopLoss, setStopLoss] = useState("0.00");
   const [takeProfit, setTakeProfit] = useState("0.00");
   const [comment, setComment] = useState("");
@@ -29,11 +37,14 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
   const [loading, setLoading] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [orderDetails, setOrderDetails] = useState(null);
+  const [userOpenOrders, setUserOpenOrders] = useState([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
 
   const chartRef = React.useRef(null);
   const [showIndicators, setShowIndicators] = useState(true);
   // State for insufficient balance alert
-  const [showInsufficientBalanceAlert, setShowInsufficientBalanceAlert] = useState(false);
+  const [showInsufficientBalanceAlert, setShowInsufficientBalanceAlert] =
+    useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   // New state for showing balance info tooltip
   const [showBalanceInfo, setShowBalanceInfo] = useState(false);
@@ -52,8 +63,16 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
   const userSpread = selectedUserData.userSpread || 0;
 
   // Constants for balance requirements
-  const MINIMUM_BALANCE = 5000;
   const MINIMUM_BALANCE_PERCENTAGE = 20; // 20%
+  const BASE_AMOUNT_PER_VOLUME = 500; // 500 per volume unit
+
+  // Update volume input handler to only allow integers
+  const handleVolumeChange = (e) => {
+    const value = e.target.value;
+    // Remove any decimal points and ensure it's an integer
+    const intValue = parseInt(value.replace(/\D/g, "")) || "";
+    setVolume(intValue.toString());
+  };
 
   // Fetch users data when component mounts
   useEffect(() => {
@@ -76,6 +95,37 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
 
     fetchUsers();
   }, [isOpen]);
+
+  // Fetch user's open orders when user is selected
+  useEffect(() => {
+    if (!selectedUser) {
+      setUserOpenOrders([]);
+      return;
+    }
+
+    const fetchUserOrders = async () => {
+      try {
+        setLoadingOrders(true);
+        const adminId = localStorage.getItem("adminId");
+        const response = await axiosInstance.get(
+          `/user-orders/${adminId}/${selectedUser}`
+        );
+        if (response.data && response.data.data) {
+          // Filter only orders that are not closed
+          const openOrders = response.data.data.filter(
+            (order) => order.orderStatus !== "CLOSED"
+          );
+          setUserOpenOrders(openOrders);
+        }
+        setLoadingOrders(false);
+      } catch (error) {
+        console.error("Error fetching user orders:", error);
+        setLoadingOrders(false);
+      }
+    };
+
+    fetchUserOrders();
+  }, [selectedUser]);
 
   // Generate chart data on component mount or when timeframe changes
   useEffect(() => {
@@ -198,48 +248,75 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
   };
 
   const calculateProfit = (orderType, volume) => {
-    const volumeValue = parseFloat(volume);
+    const volumeValue = parseInt(volume);
     const spreadValue = parseFloat(userSpread);
 
     // Calculate profit based on spread and volume
     return (volumeValue * spreadValue).toFixed(2);
   };
 
-  // Enhanced checkSufficientBalance function
-  const checkSufficientBalance = (price, volume) => {
+  // Calculate total volume from open orders
+  const calculateTotalOpenOrdersVolume = () => {
+    return userOpenOrders.reduce((total, order) => {
+      return total + (parseInt(order.volume) || 0);
+    }, 0);
+  };
+
+  // Enhanced checkSufficientBalance function with updated logic
+  const checkSufficientBalance = (price, volumeInput) => {
     // Validate that user data exists
     if (!selectedUserData || !selectedUserData.AMOUNTFC) {
       setErrorMessage("User account information not available");
       return false;
     }
 
-    const userBalance = parseFloat(selectedUserData.AMOUNTFC);
-    const tradeAmount = parseFloat(price) * parseFloat(volume);
-    
-    // Check 1: Minimum balance of $5000
-    if (userBalance < MINIMUM_BALANCE) {
-      setErrorMessage(
-        `Insufficient balance. Minimum required balance is $${MINIMUM_BALANCE.toFixed(
-          2
-        )}, Available balance: $${userBalance.toFixed(2)}`
-      );
+    // Convert volume to integer
+    const volume = parseInt(volumeInput) || 0;
+    if (volume <= 0) {
+      setErrorMessage("Volume must be at least 1");
       return false;
     }
 
-    // Check 2: Must maintain at least 20% of account after trade
-    const remainingBalance = userBalance - tradeAmount;
-    const minimumRequiredRemainingBalance = (userBalance * MINIMUM_BALANCE_PERCENTAGE) / 100;
+    const userBalance = parseFloat(selectedUserData.AMOUNTFC);
 
-    if (remainingBalance < minimumRequiredRemainingBalance) {
-      const maxAllowedTrade = userBalance - minimumRequiredRemainingBalance;
-      const suggestedVolume = (maxAllowedTrade / parseFloat(price)).toFixed(2);
-      
+    // Calculate total base amount for the trade (500 per volume)
+    const baseAmount = volume * BASE_AMOUNT_PER_VOLUME;
+
+    // Add 20% margin requirement
+    const marginRequirement = baseAmount * (MINIMUM_BALANCE_PERCENTAGE / 100);
+
+    // Total required amount for this trade
+    const totalRequiredAmount = baseAmount + marginRequirement;
+
+    // Get total volume from existing open orders
+    const existingVolume = calculateTotalOpenOrdersVolume();
+
+    // Calculate total base amount for existing orders
+    const existingOrdersAmount = existingVolume * BASE_AMOUNT_PER_VOLUME;
+
+    // Add 20% margin for existing orders
+    const existingOrdersMargin =
+      existingOrdersAmount * (MINIMUM_BALANCE_PERCENTAGE / 100);
+
+    // Total amount needed (new trade + existing open orders)
+    const totalNeededAmount =
+      totalRequiredAmount + existingOrdersAmount + existingOrdersMargin;
+
+    // Check if user has enough balance for both existing and new orders
+    if (userBalance < totalNeededAmount) {
+      const maxAllowedVolume = Math.floor(
+        (userBalance - existingOrdersAmount - existingOrdersMargin) /
+          (BASE_AMOUNT_PER_VOLUME * (1 + MINIMUM_BALANCE_PERCENTAGE / 100))
+      );
+
       setErrorMessage(
-        `This trade would reduce your balance below the minimum required ${MINIMUM_BALANCE_PERCENTAGE}% threshold. 
-        Trade amount: $${tradeAmount.toFixed(2)}, 
-        Available balance: $${userBalance.toFixed(2)}, 
-        Minimum remaining balance required: $${minimumRequiredRemainingBalance.toFixed(2)}.
-        Suggested maximum volume: ${suggestedVolume}`
+        `Insufficient balance for this trade. 
+        Required amount: $${totalRequiredAmount.toFixed(2)} for new trade + $${(
+          existingOrdersAmount + existingOrdersMargin
+        ).toFixed(2)} for existing orders.
+        Available balance: $${userBalance.toFixed(2)}.
+        Your current open orders volume: ${existingVolume} units.
+        Maximum new volume allowed: ${Math.max(0, maxAllowedVolume)}`
       );
       return false;
     }
@@ -261,8 +338,15 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
       });
     }
     const marginPercentage = parseFloat(selectedUserData.margin || 5);
-    const tradeAmount = parseFloat(bidPrice) * parseFloat(volume);
-    const requiredMargin = tradeAmount * (marginPercentage / 100);
+    const volumeValue = parseInt(volume);
+    const baseAmount = volumeValue * BASE_AMOUNT_PER_VOLUME;
+    const marginRequirement = baseAmount * (MINIMUM_BALANCE_PERCENTAGE / 100);
+
+    // Get trade details to access totalNeededAmount
+    const tradeDetails = calculateTradeDetails();
+    const totalNeededAmount = tradeDetails
+      ? tradeDetails.totalNeededAmount
+      : (baseAmount + marginRequirement).toFixed(2);
 
     const orderNo = generateOrderNo();
     const profit = calculateProfit("BUY", volume);
@@ -271,12 +355,12 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
       price: bidPrice,
       openingPrice: bidPrice,
       openingDate: new Date(),
-      volume: parseFloat(volume),
+      volume: volumeValue,
       stopLoss: parseFloat(stopLoss),
       takeProfit: parseFloat(takeProfit),
       comment,
       user: selectedUser,
-      margin: requiredMargin.toFixed(2),
+      margin: marginRequirement.toFixed(2),
       marginPercentage,
       userSpread,
       profit,
@@ -284,6 +368,8 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
       orderStatus: "PROCESSING",
       symbol: "GOLD",
       orderNo: orderNo,
+      baseAmount: baseAmount,
+      totalNeededAmount: totalNeededAmount,
     };
 
     onPlaceOrder(orderData);
@@ -291,9 +377,12 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
       orderNo: orderNo,
       type: "BUY",
       price: bidPrice,
-      volume: parseFloat(volume),
+      volume: volumeValue,
       symbol: "GOLD",
-      margin: requiredMargin.toFixed(2),
+      margin: marginRequirement.toFixed(2),
+      baseAmount: baseAmount,
+      totalAmount: (baseAmount + marginRequirement).toFixed(2),
+      totalNeededAmount: totalNeededAmount,
     });
 
     setShowConfirmation(true);
@@ -313,8 +402,16 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
       });
     }
     const marginPercentage = parseFloat(selectedUserData.margin || 5);
-    const tradeAmount = parseFloat(askPrice) * parseFloat(volume);
-    const requiredMargin = tradeAmount * (marginPercentage / 100);
+    const volumeValue = parseInt(volume);
+    const baseAmount = volumeValue * BASE_AMOUNT_PER_VOLUME;
+    const marginRequirement = baseAmount * (MINIMUM_BALANCE_PERCENTAGE / 100);
+
+    // Get trade details to access totalNeededAmount
+    const tradeDetails = calculateTradeDetails();
+    const totalNeededAmount = tradeDetails
+      ? tradeDetails.totalNeededAmount
+      : (baseAmount + marginRequirement).toFixed(2);
+
     const orderNo = generateOrderNo();
     const profit = calculateProfit("SELL", volume);
     const orderData = {
@@ -322,19 +419,21 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
       price: askPrice,
       openingPrice: askPrice,
       openingDate: new Date(),
-      volume: parseFloat(volume),
+      volume: volumeValue,
       stopLoss: parseFloat(stopLoss),
       takeProfit: parseFloat(takeProfit),
       comment,
       userSpread,
       profit,
-      margin: requiredMargin.toFixed(2),
+      margin: marginRequirement.toFixed(2),
       marginPercentage,
       user: selectedUser,
       timestamp: new Date().toISOString(),
       orderStatus: "PROCESSING",
       symbol: "GOLD",
       orderNo: orderNo,
+      baseAmount: baseAmount,
+      totalNeededAmount: totalNeededAmount,
     };
 
     onPlaceOrder(orderData);
@@ -342,9 +441,12 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
       orderNo: orderNo,
       type: "SELL",
       price: askPrice,
-      volume: parseFloat(volume),
+      volume: volumeValue,
       symbol: "GOLD",
-      margin: requiredMargin.toFixed(2),
+      margin: marginRequirement.toFixed(2),
+      baseAmount: baseAmount,
+      totalAmount: (baseAmount + marginRequirement).toFixed(2),
+      totalNeededAmount: totalNeededAmount,
     });
 
     setShowConfirmation(true);
@@ -359,13 +461,14 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
     setShowInsufficientBalanceAlert(false);
   };
 
-  const handleIncrement = (setter, value, increment = 1) => {
-    setter((parseFloat(value) + increment).toFixed(2));
+  const handleIncrement = () => {
+    const currentVolume = parseInt(volume) || 0;
+    setVolume((currentVolume + 1).toString());
   };
 
-  const handleDecrement = (setter, value, decrement = 1) => {
-    const result = parseFloat(value) - decrement;
-    setter((result >= 0 ? result : 0).toFixed(2));
+  const handleDecrement = () => {
+    const currentVolume = parseInt(volume) || 0;
+    setVolume(Math.max(1, currentVolume - 1).toString());
   };
 
   const calculateOptimalLevels = (type) => {
@@ -382,32 +485,50 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
     }
   };
 
-  // Improved handleAdjustVolume function
+  // Improved handleAdjustVolume function based on new logic
   const handleAdjustVolume = () => {
     if (selectedUserData && selectedUserData.AMOUNTFC) {
       const userBalance = parseFloat(selectedUserData.AMOUNTFC);
-      const priceToUse = parseFloat(askPrice); // Use ask price as it's typically higher
-      
-      // First check minimum balance requirement
-      if (userBalance < MINIMUM_BALANCE) {
-        setErrorMessage(`Account balance must be at least $${MINIMUM_BALANCE.toLocaleString()}. Current balance: $${userBalance.toFixed(2)}`);
-        setShowInsufficientBalanceAlert(true);
-        return;
-      }
-      
-      // Calculate maximum available funds while maintaining minimum percentage
-      const maxAvailableFunds = userBalance * (1 - (MINIMUM_BALANCE_PERCENTAGE / 100));
-      
-      // Calculate safe volume
-      const safeVolume = (maxAvailableFunds / priceToUse).toFixed(2);
-      
-      // Set the volume (with minimum of 0.01)
-      const newVolume = Math.max(0.01, parseFloat(safeVolume)).toFixed(2);
-      setVolume(newVolume);
-      
+
+      // Get total volume from existing open orders
+      const existingVolume = calculateTotalOpenOrdersVolume();
+
+      // Calculate total base amount for existing orders
+      const existingOrdersAmount = existingVolume * BASE_AMOUNT_PER_VOLUME;
+
+      // Add 20% margin for existing orders
+      const existingOrdersMargin =
+        existingOrdersAmount * (MINIMUM_BALANCE_PERCENTAGE / 100);
+
+      // Calculate available balance after accounting for existing orders
+      const availableBalance =
+        userBalance - existingOrdersAmount - existingOrdersMargin;
+
+      // Calculate max volume with 20% margin
+      const maxVolume = Math.floor(
+        availableBalance /
+          (BASE_AMOUNT_PER_VOLUME * (1 + MINIMUM_BALANCE_PERCENTAGE / 100))
+      );
+
+      // Ensure volume is at least 1, or 0 if not possible
+      const newVolume = Math.max(0, maxVolume);
+
+      setVolume(newVolume.toString());
+
       // Update feedback to user
-      setErrorMessage(`Volume adjusted to ${newVolume} to maintain minimum required balance.`);
-      setShowInsufficientBalanceAlert(false);
+      if (newVolume === 0) {
+        setErrorMessage(
+          `Cannot place new trades. You have ${existingVolume} volume in open orders requiring $${(
+            existingOrdersAmount + existingOrdersMargin
+          ).toFixed(2)} of your balance.`
+        );
+        setShowInsufficientBalanceAlert(true);
+      } else {
+        setErrorMessage(
+          `Volume adjusted to ${newVolume} to maintain minimum required balance.`
+        );
+        setShowInsufficientBalanceAlert(true);
+      }
     }
   };
 
@@ -416,24 +537,50 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
     if (!selectedUserData || !selectedUserData.AMOUNTFC) return null;
 
     const userBalance = parseFloat(selectedUserData.AMOUNTFC);
-    const priceToUse = parseFloat(askPrice); 
-    const volumeValue = parseFloat(volume);
-    const tradeAmount = priceToUse * volumeValue;
-    
-    const remainingBalance = userBalance - tradeAmount;
-    const minimumRequiredRemainingBalance = (userBalance * MINIMUM_BALANCE_PERCENTAGE) / 100;
-    
-    // Calculate maximum allowed volume
-    const maxAllowedAmount = userBalance - minimumRequiredRemainingBalance;
-    const maxAllowedVolume = (maxAllowedAmount / priceToUse).toFixed(2);
-    
-    const isTradeValid = remainingBalance >= minimumRequiredRemainingBalance && userBalance >= MINIMUM_BALANCE;
+    const volumeValue = parseInt(volume) || 0;
+
+    // Calculate the base amount (500 per volume)
+    const baseAmount = volumeValue * BASE_AMOUNT_PER_VOLUME;
+
+    // Add 20% margin requirement
+    const marginRequirement = baseAmount * (MINIMUM_BALANCE_PERCENTAGE / 100);
+
+    // Total required amount for this trade
+    const totalRequiredAmount = baseAmount + marginRequirement;
+
+    // Get existing open orders volume
+    const existingVolume = calculateTotalOpenOrdersVolume();
+
+    // Calculate total for existing orders
+    const existingOrdersAmount = existingVolume * BASE_AMOUNT_PER_VOLUME;
+    const existingOrdersMargin =
+      existingOrdersAmount * (MINIMUM_BALANCE_PERCENTAGE / 100);
+    const totalExistingAmount = existingOrdersAmount + existingOrdersMargin;
+
+    // Total needed (new + existing)
+    const totalNeededAmount = totalRequiredAmount + totalExistingAmount;
+
+    // Remaining balance after this trade
+    const remainingBalance = userBalance - totalNeededAmount;
+
+    // Max allowed volume calculation
+    const maxAllowedVolume = Math.floor(
+      (userBalance - totalExistingAmount) /
+        (BASE_AMOUNT_PER_VOLUME * (1 + MINIMUM_BALANCE_PERCENTAGE / 100))
+    );
+
+    // Check if trade is valid - removed minimum balance check
+    const isTradeValid = remainingBalance >= 0 && volumeValue > 0;
 
     return {
       userBalance: userBalance.toFixed(2),
-      tradeAmount: tradeAmount.toFixed(2),
+      baseAmount: baseAmount.toFixed(2),
+      marginAmount: marginRequirement.toFixed(2),
+      totalAmount: totalRequiredAmount.toFixed(2),
+      existingVolume,
+      existingAmount: totalExistingAmount.toFixed(2),
+      totalNeededAmount: totalNeededAmount.toFixed(2),
       remainingBalance: remainingBalance.toFixed(2),
-      minimumRequiredRemainingBalance: minimumRequiredRemainingBalance.toFixed(2),
       remainingPercentage: ((remainingBalance / userBalance) * 100).toFixed(1),
       maxAllowedVolume,
       isTradeValid,
@@ -472,7 +619,6 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
   };
 
   const tradeDetails = calculateTradeDetails();
-
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 bg-opacity-80 flex items-center justify-center z-50 p-2">
@@ -886,12 +1032,14 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
               <div className="mb-4 p-2 border border-gray-200 rounded-md bg-gray-50 text-xs">
                 <div className="flex justify-between mb-1">
                   <span className="text-gray-600">Account Balance:</span>
-                  <span className="font-medium">${tradeDetails.userBalance}</span>
+                  <span className="font-medium">
+                    ${tradeDetails.userBalance}
+                  </span>
                 </div>
                 <div className="flex justify-between mb-1">
                   <div className="flex items-center">
                     <span className="text-gray-600">Trade Amount:</span>
-                    <div 
+                    <div
                       className="relative inline-block ml-1"
                       onMouseEnter={() => setShowBalanceInfo(true)}
                       onMouseLeave={() => setShowBalanceInfo(false)}
@@ -906,19 +1054,34 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
                       )}
                     </div>
                   </div>
-                  <span className={`font-medium ${
-                    tradeDetails.isTradeValid ? 'text-gray-800' : 'text-red-600'
-                  }`}>${tradeDetails.tradeAmount}</span>
+                  <span
+                    className={`font-medium ${
+                      tradeDetails.isTradeValid
+                        ? "text-gray-800"
+                        : "text-red-600"
+                    }`}
+                  >
+                    ${tradeDetails.totalNeededAmount}
+                  </span>
                 </div>
                 <div className="flex justify-between mb-1">
                   <span className="text-gray-600">Remaining Balance:</span>
-                  <span className={`font-medium ${
-                    tradeDetails.isTradeValid ? 'text-gray-800' : 'text-red-600'
-                  }`}>${tradeDetails.remainingBalance} ({tradeDetails.remainingPercentage}%)</span>
+                  <span
+                    className={`font-medium ${
+                      tradeDetails.isTradeValid
+                        ? "text-gray-800"
+                        : "text-red-600"
+                    }`}
+                  >
+                    ${tradeDetails.remainingBalance} (
+                    {tradeDetails.remainingPercentage}%)
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Max Volume:</span>
-                  <span className="font-medium text-blue-600">{tradeDetails.maxAllowedVolume}</span>
+                  <span className="font-medium text-blue-600">
+                    {tradeDetails.maxAllowedVolume}
+                  </span>
                 </div>
                 <button
                   onClick={handleAdjustVolume}
@@ -1064,52 +1227,78 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
 
       {/* Order confirmation dialog */}
       {showConfirmation && orderDetails && (
-        <div className="fixed inset-0 bg-white/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full animate-fade-in">
-            <div className="flex items-center justify-center text-green-500 mb-4">
-              <Check size={48} className="text-green-500" />
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full animate-in fade-in duration-300 overflow-hidden">
+            {/* Success header */}
+            <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-6 text-white">
+              <div className="flex items-center justify-center mb-3">
+                <CheckCircle size={56} className="text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-center">
+                Order Placed Successfully
+              </h3>
             </div>
-            <h3 className="text-xl font-bold text-center text-gray-800 mb-4">
-              Order Placed Successfully
-            </h3>
-            <div className="bg-gray-50 p-4 rounded-md mb-4 border border-gray-200">
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="text-gray-600">Order Number:</div>
-                <div className="font-medium text-gray-800">{orderDetails.orderNo}</div>
-                
-                <div className="text-gray-600">Type:</div>
-                <div className="font-medium text-gray-800">
-                  <span
-                    className={`${
+
+            {/* Order details */}
+            <div className="p-6">
+              {/* Order number with copy button */}
+              <div className="flex items-center justify-between mb-6 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                <div>
+                  <div className="text-xs text-gray-500">Order Number</div>
+                  <div className="font-medium">{orderDetails.orderNo}</div>
+                </div>
+              </div>
+
+              {/* Order details grid */}
+              <div className="grid grid-cols-2 gap-y-4 mb-6">
+                <div>
+                  <div className="text-xs text-gray-500">Type</div>
+                  <div
+                    className={`font-medium ${
                       orderDetails.type === "BUY"
                         ? "text-green-600"
                         : "text-red-600"
                     }`}
                   >
                     {orderDetails.type}
-                  </span>
+                  </div>
                 </div>
-                
-                <div className="text-gray-600">Symbol:</div>
-                <div className="font-medium text-gray-800">{orderDetails.symbol}</div>
-                
-                <div className="text-gray-600">Price:</div>
-                <div className="font-medium text-gray-800">${orderDetails.price}</div>
-                
-                <div className="text-gray-600">Volume:</div>
-                <div className="font-medium text-gray-800">{orderDetails.volume}</div>
-                
-                <div className="text-gray-600">Margin Used:</div>
-                <div className="font-medium text-gray-800">${orderDetails.margin}</div>
+
+                <div>
+                  <div className="text-xs text-gray-500">Symbol</div>
+                  <div className="font-medium">{orderDetails.symbol}</div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-gray-500">Price</div>
+                  <div className="font-medium">${orderDetails.price}</div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-gray-500">Volume</div>
+                  <div className="font-medium">{orderDetails.volume} TTBAR</div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-gray-500">Date</div>
+                  <div className="font-medium">{orderDetails.date}</div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-gray-500">Time</div>
+                  <div className="font-medium">{orderDetails.time}</div>
+                </div>
               </div>
-            </div>
-            <div className="text-center">
-              <button
-                onClick={handleConfirmationClose}
-                className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-6 rounded-md shadow-md transition-colors"
-              >
-                Close
-              </button>
+
+              {/* Action buttons */}
+              <div className="flex flex-col space-y-3">
+                <button
+                  onClick={handleConfirmationClose}
+                  className="bg-white hover:bg-gray-50 text-gray-700 py-3 px-6 rounded-lg border border-gray-300 transition-colors w-full font-medium"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1118,16 +1307,14 @@ const OrderDialog = ({ isOpen, onClose, marketData, onPlaceOrder }) => {
       {/* Insufficient balance alert */}
       {showInsufficientBalanceAlert && (
         <div className="fixed inset-0  bg-white/50 flex items-center justify-center z-50">
-         <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full animate-fade-in">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full animate-fade-in">
             <div className="flex items-center justify-center text-red-500 mb-4">
               <AlertTriangle size={48} className="text-red-500" />
             </div>
             <h3 className="text-xl font-bold text-center text-gray-800 mb-4">
               Insufficient Balance
             </h3>
-            <p className="text-gray-600 mb-4 text-center">
-              {errorMessage}
-            </p>
+            <p className="text-gray-600 mb-4 text-center">{errorMessage}</p>
             <div className="flex justify-center gap-4">
               <button
                 onClick={handleAdjustVolume}
