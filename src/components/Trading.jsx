@@ -44,6 +44,7 @@ export default function Trading() {
   const [tableHeaders, setTableHeaders] = useState([
     { key: "orderNo", label: "Order ID", align: "left" },
     { key: "symbol", label: "Symbol", align: "left" },
+    { key: "ticket", label: "Ticket", align: "left" },
     { key: "type", label: "Type", align: "left" },
     { key: "volume", label: "Size", align: "right" },
     { key: "openingPrice", label: "Open Price", align: "right" },
@@ -84,7 +85,7 @@ export default function Trading() {
       if (response.data.success && response.data.data) {
         // Filter orders with status "PROCESSING"
         const processingOrders = response.data.data.filter(
-          (order) => order.orderStatus === "PROCESSING"
+          (order) => order.orderStatus === "OPEN"
         );
 
         // Process orders to include user information
@@ -274,8 +275,7 @@ export default function Trading() {
         userId: orderDetails.user,
         comment: orderDetails.comment || "",
         userSpread: orderDetails.userSpread,
-        requiredMargin:orderDetails.totalNeededAmount,
-
+        requiredMargin: orderDetails.totalNeededAmount,
       };
 
       // Send order to the server
@@ -592,6 +592,9 @@ export default function Trading() {
                       </td>
                       <td className="py-3 px-3 whitespace-nowrap text-left">
                         {order.symbol}
+                      </td>
+                      <td className="py-3 px-3 whitespace-nowrap text-left">
+                        {order.ticket}
                       </td>
                       <td className="py-3 px-3 whitespace-nowrap">
                         <span
